@@ -440,7 +440,7 @@ async function sendCategoriesMenu(chatId) {
         reply_markup: {
             inline_keyboard: [
                 // В функции sendCategoriesMenu добавьте новую кнопку:
-                [{ text: `⭐️ HOT/OUT (TU) ПОЧТЫ ⭐️`, callback_data: 'tu_mail_category' }]
+                [{ text: `⭐️ HOT/OUT (TU) ПОЧТЫ ⭐️`, callback_data: 'tu_mail_category' }],
                 [{ text: `📧 ПОЧТЫ ICLOUD (${emailsCount}шт)`, callback_data: 'emails_category' }],
                 [{ text: `🔥 FIRSTMAIL (${firstmailCount}шт)`, callback_data: 'firstmail_category' }],
                 [{ text: '🤖 СОФТ TG PASING', callback_data: 'tg_pasing_category' }],
