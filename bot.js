@@ -345,15 +345,15 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
 
     const options = {
         parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
+        reply_markup: JSON.stringify({ // ← Добавьте JSON.stringify
+            inline_keyboard: [ // ← Убедитесь, что это массив массивов
                 [{ text: `📂 КАТЕГОРИИ 📂`, callback_data: 'categories' }],
                 [{ text: '🛒 МОИ ПОКУПКИ 🛒', callback_data: 'my_purchases' }],
                 [{ text: '🔗 РЕФЕРАЛКА 🔗', callback_data: 'referral' }],
                 [{ text: '🇺🇦 СВЯЗКА 🇺🇦 ', callback_data: 'get_uk_bundle' }],
                 [{ text: '🆘 ПОДДЕРЖКА 🆘', callback_data: 'support' }]
             ]
-        }
+        })
     };
 
     if (deletePrevious) {
