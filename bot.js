@@ -298,7 +298,8 @@ bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
 });
 
 // Главное меню с инлайн-кнопками
-async function sendMainMenu(chatId, deletePrevious = false, msg = null) { // Add msg parameter
+// Главное меню с инлайн-кнопками
+async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageId = null) {
     const emailsCount = await (await emails()).countDocuments();
     const firstmailCount = await (await firstmails()).countDocuments();
     const usaMailCount = await (await usaMails()).countDocuments();
@@ -310,9 +311,9 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null) { // Add
         {
             $setOnInsert: {
                 user_id: chatId,
-                username: msg?.from?.username || '', // Use optional chaining
-                first_name: msg?.from?.first_name || '', // Use optional chaining
-                last_name: msg?.from?.last_name || '', // Use optional chaining
+                username: msg?.from?.username || '',
+                first_name: msg?.from?.first_name || '',
+                last_name: msg?.from?.last_name || '',
                 first_seen: new Date(),
                 emails: [],
                 firstmails: [],
@@ -361,13 +362,26 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null) { // Add
         });
     }
 
+    if (messageId) {
+        try {
+            return bot.editMessageText(welcomeText, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML',
+                reply_markup: options.reply_markup
+            });
+        } catch (e) {
+            console.error('Ошибка при редактировании меню:', e);
+            await bot.deleteMessage(chatId, messageId);
+        }
+    }
+
     return bot.sendPhoto(chatId, 'https://i.ibb.co/spcnyqTy/image-3.png', {
         caption: welcomeText,
         parse_mode: 'HTML',
         reply_markup: options.reply_markup
     });
 }
-
 // Меню рефералки
 async function sendReferralMenu(chatId) {
     const referralLink = generateReferralLink(chatId);
@@ -422,7 +436,8 @@ async function handleUkBundle(chatId, user) {
 }
 
 // Меню категорий
-async function sendCategoriesMenu(chatId) {
+// Меню категорий
+async function sendCategoriesMenu(chatId, messageId = null) {
     const emailsCount = await (await emails()).countDocuments();
     const firstmailCount = await (await firstmails()).countDocuments();
     const usaMailCount = await (await usaMails()).countDocuments();
@@ -439,7 +454,6 @@ async function sendCategoriesMenu(chatId) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                // В функции sendCategoriesMenu добавьте новую кнопку:
                 [{ text: `⭐️ HOT/OUT (TU) ПОЧТЫ ⭐️`, callback_data: 'tu_mail_category' }],
                 [{ text: `📧 ПОЧТЫ ICLOUD (${emailsCount}шт)`, callback_data: 'emails_category' }],
                 [{ text: `🔥 FIRSTMAIL (${firstmailCount}шт)`, callback_data: 'firstmail_category' }],
@@ -451,6 +465,21 @@ async function sendCategoriesMenu(chatId) {
             ]
         }
     };
+
+    if (messageId) {
+        try {
+            return bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: 'HTML',
+                reply_markup: options.reply_markup
+            });
+        } catch (e) {
+            console.error('Ошибка при редактировании категорий:', e);
+            await bot.deleteMessage(chatId, messageId);
+            return bot.sendMessage(chatId, text, options);
+        }
+    }
 
     return bot.sendMessage(chatId, text, options);
 }
@@ -2168,6 +2197,7 @@ async function sendSupportMenu(chatId) {
 bot.on('callback_query', async (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
+    const messageId = callbackQuery.message.message_id;
 
     try {
         const usersCollection = await users();
@@ -2273,11 +2303,16 @@ if (data === 'tg_pasing_info') {
         }
         
 
-        // Назад к категориям
         if (data === 'back_to_categories') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendCategoriesMenu(chatId);
-        }
+    try {
+        await bot.answerCallbackQuery(callbackQuery.id);
+        return sendCategoriesMenu(chatId, callbackQuery.message.message_id);
+    } catch (e) {
+        console.error('Ошибка при возврате к категориям:', e);
+        await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+        return sendCategoriesMenu(chatId);
+    }
+}
 
         // Категория iCloud
         if (data === 'emails_category') {
@@ -2713,6 +2748,7 @@ if (data === 'tg_pasing_info') {
 });
 
 // Команда /start
+// Команда /start
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
 
@@ -2745,7 +2781,7 @@ bot.onText(/\/start/, async (msg) => {
         { upsert: true }
     );
 
-    sendMainMenu(chatId);
+    // Удаляем дублирующий вызов sendMainMenu отсюда!
 });
 
 // Админские команды
