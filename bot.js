@@ -1588,6 +1588,7 @@ async function handleSuccessfulUkrMailPayment(userId, transactionId) {
 
     return true;
 }
+
 // Периодическая проверка оплаты с защитой от дублирования iCloud/FIRSTMAIL/USA/UKR
 setInterval(async () => {
     try {
