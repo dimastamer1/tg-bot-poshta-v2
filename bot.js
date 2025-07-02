@@ -1736,34 +1736,6 @@ async function handleSuccessfulUsaMailPayment(userId, transactionId) {
     return true;
 }
 
-if (data === 'buy_tu_mail') {
-    const tuMailCount = await (await tuMails()).countDocuments();
-    if (tuMailCount === 0) {
-        return bot.answerCallbackQuery(callbackQuery.id, {
-            text: 'HOT/OUT TU почты временно закончились. Попробуйте позже.',
-            show_alert: true
-        });
-    }
-    await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-    return sendTuMailQuantityMenu(chatId);
-}
-
-if (data.startsWith('tu_mail_quantity_')) {
-    const quantity = parseInt(data.split('_')[3]);
-    const invoiceUrl = await createTuMailInvoice(chatId, quantity);
-
-    if (!invoiceUrl) {
-        return bot.answerCallbackQuery(callbackQuery.id, {
-            text: 'Ошибка при создании платежа. Попробуйте позже.',
-            show_alert: true
-        });
-    }
-
-    await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-    await sendTuMailPaymentMenu(chatId, invoiceUrl, quantity);
-    return bot.answerCallbackQuery(callbackQuery.id);
-}
-
 
 // Обработка успешной оплаты UKR FIRSTMAIL
 async function handleSuccessfulUkrMailPayment(userId, transactionId) {
@@ -2210,6 +2182,34 @@ bot.on('callback_query', async (callbackQuery) => {
             return sendReferralMenu(chatId);
         }
 
+        if (data === 'buy_tu_mail') {
+      const tuMailCount = await (await tuMails()).countDocuments();
+      if (tuMailCount === 0) {
+          return bot.answerCallbackQuery(callbackQuery.id, {
+              text: 'HOT/OUT TU почты временно закончились. Попробуйте позже.',
+              show_alert: true
+          });
+      }
+      await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+      return sendTuMailQuantityMenu(chatId);
+  }
+
+  if (data.startsWith('tu_mail_quantity_')) {
+      const quantity = parseInt(data.split('_')[3]);
+      const invoiceUrl = await createTuMailInvoice(chatId, quantity);
+
+      if (!invoiceUrl) {
+          return bot.answerCallbackQuery(callbackQuery.id, {
+              text: 'Ошибка при создании платежа. Попробуйте позже.',
+              show_alert: true
+          });
+      }
+
+      await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+      await sendTuMailPaymentMenu(chatId, invoiceUrl, quantity);
+      return bot.answerCallbackQuery(callbackQuery.id);
+  }
+
         if (data === 'copy_referral') {
             const referralLink = generateReferralLink(chatId);
             await bot.answerCallbackQuery(callbackQuery.id, {
@@ -2245,10 +2245,7 @@ if (data === 'tu_mail_category') {
     return sendTuMailMenu(chatId);
 }
 
-// Добавьте это рядом с другими коллекциями
-tuMails: async () => {
-    return (await connect()).collection('tu_mails');
-}
+
 
 // Описание функций TG PASING
 if (data === 'tg_pasing_info') {
@@ -2348,6 +2345,7 @@ if (data === 'tg_pasing_info') {
             return sendQuantityMenu(chatId);
         }
 
+    
 
         // Купить firstmail
         if (data === 'buy_firstmail') {

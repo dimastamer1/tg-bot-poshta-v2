@@ -15,6 +15,11 @@ async function connect() {
   return db;
 }
 
+// Получить коллекцию TU MAILS
+async function tuMails() {
+  return (await connect()).collection('tu_mails');
+}
+
 // Получить коллекцию почт iCloud
 async function emails() {
   return (await connect()).collection('emails');
@@ -166,6 +171,7 @@ async function writeDB(data) {
 
 export {
   connect,
+  tuMails,
   emails,
   users,
   firstmails,

@@ -3,3 +3,5 @@ echo "node_modules/" >> .gitignore
 echo "*.json" >> .gitignore  # кроме package.json!
 echo "db.json" >> .gitignore
 echo "emailsPool.json" >> .gitignore
+echo config.js >> .gitignore
+
