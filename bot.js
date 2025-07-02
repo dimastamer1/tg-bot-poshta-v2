@@ -439,8 +439,6 @@ async function sendCategoriesMenu(chatId) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                // В функции sendCategoriesMenu добавьте новую кнопку:
-                [{ text: `⭐️ HOT/OUT (TU) ПОЧТЫ ⭐️`, callback_data: 'tu_mail_category' }]
                 [{ text: `📧 ПОЧТЫ ICLOUD (${emailsCount}шт)`, callback_data: 'emails_category' }],
                 [{ text: `🔥 FIRSTMAIL (${firstmailCount}шт)`, callback_data: 'firstmail_category' }],
                 [{ text: '🤖 СОФТ TG PASING', callback_data: 'tg_pasing_category' }],
@@ -473,31 +471,6 @@ async function sendEmailsMenu(chatId) {
                 [{ text: '💰 КУПИТЬ ПОЧТУ 💰', callback_data: 'buy_email' }],
                 [{ text: '🔑 ПОЛУЧИТЬ КОД 🔑', callback_data: 'get_code' }],
                 [{ text: '🔙 Назад 🔙', callback_data: 'back_to_categories' }]
-            ]
-        }
-    };
-
-    return bot.sendMessage(chatId, text, options);
-}
-
-// Меню HOT/OUT TU
-async function sendTuMailMenu(chatId) {
-    const tuMailCount = await (await tuMails()).countDocuments();
-
-    const text = `🔥 <b>HOT/OUT TU ПОЧТЫ (${tuMailCount}шт)</b>\n\n` +
-        `<b>Особенности:</b>\n` +
-        `✅ Готовые к использованию аккаунты\n` +
-        `✅ Полный доступ ко всем данным\n` +
-        `✅ Уникальные комбинации\n\n` +
-        `Цена: <b>0.10 USDT</b> за 1 аккаунт\n\n` +
-        `Выберите действие:`;
-
-    const options = {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '💰 КУПИТЬ HOT/OUT TU 💰', callback_data: 'buy_tu_mail' }],
-                [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
             ]
         }
     };
@@ -758,62 +731,6 @@ async function sendFirstmailQuantityMenu(chatId) {
     return bot.sendMessage(chatId, text, options);
 }
 
-async function sendTuMailQuantityMenu(chatId) {
-    const availableCount = await (await tuMails()).countDocuments();
-    const maxAvailable = Math.min(availableCount, 50); // До 50 почт
-
-    const quantityButtons = [];
-    // Добавляем кнопки по 5
-    for (let i = 5; i <= Math.min(maxAvailable, 50); i += 5) {
-        quantityButtons.push({ text: `${i}`, callback_data: `tu_mail_quantity_${i}` });
-    }
-    
-    // Если есть остаток, добавляем последнюю кнопку
-    if (maxAvailable % 5 !== 0 && maxAvailable > 0) {
-        quantityButtons.push({ text: `${maxAvailable}`, callback_data: `tu_mail_quantity_${maxAvailable}` });
-    }
-
-    const rows = [];
-    for (let i = 0; i < quantityButtons.length; i += 5) {
-        rows.push(quantityButtons.slice(i, i + 5));
-    }
-    rows.push([{ text: '🔙 Назад', callback_data: 'tu_mail_category' }]);
-
-    const text = `📦 <b>Выберите количество HOT/OUT TU аккаунтов</b>\n\n` +
-        `Доступно: <b>${maxAvailable}</b> аккаунтов\n` +
-        `Цена: <b>0.10 USDT</b> за 1 аккаунт`;
-
-    const options = {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: rows
-        }
-    };
-
-    return bot.sendMessage(chatId, text, options);
-}
-
-async function sendTuMailPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.10 * quantity).toFixed(2);
-
-    const text = `💳 <b>Оплата ${quantity} HOT/OUT TU аккаунтов</b>\n\n` +
-        `Сумма: <b>${totalAmount} USDT</b>\n\n` +
-        `Нажмите кнопку для оплаты:`;
-
-    const options = {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '✅ ОПЛАТИТЬ ЧЕРЕЗ CRYPTOBOT', url: invoiceUrl }],
-                [{ text: '🔙 Назад', callback_data: 'back_to_tu_mail_quantity_menu' }]
-            ]
-        }
-    };
-
-    return bot.sendMessage(chatId, text, options);
-}
-
-
 // Меню выбора количества почт USA FIRSTMAIL
 async function sendUsaMailQuantityMenu(chatId) {
     const availableCount = await (await usaMails()).countDocuments();
@@ -1068,8 +985,6 @@ async function sendTgPasingPaymentMenu(chatId, invoiceUrl) {
     });
 }
 
-
-
 // Создание инвойса с транзакцией iCloud
 async function createInvoice(userId, quantity) {
     try {
@@ -1248,50 +1163,6 @@ async function createUsaMailInvoice(userId, quantity) {
     }
 }
 
-async function createTuMailInvoice(userId, quantity) {
-    try {
-        const transactionId = `buy_tu_mail_${userId}_${Date.now()}`;
-        const amount = 0.10 * quantity;
-
-        const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
-            asset: 'USDT',
-            amount: amount,
-            description: `Покупка ${quantity} HOT/OUT TU почт`,
-            hidden_message: 'Спасибо за покупку!',
-            paid_btn_name: 'openBot',
-            paid_btn_url: 'https://t.me/ubtshope_bot',
-            payload: transactionId
-        }, {
-            headers: {
-                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const usersCollection = await users();
-        await usersCollection.updateOne(
-            { user_id: userId },
-            {
-                $setOnInsert: { user_id: userId, tu_mails: [] },
-                $set: {
-                    [`tu_mail_transactions.${transactionId}`]: {
-                        invoiceId: response.data.result.invoice_id,
-                        quantity: quantity,
-                        status: 'pending',
-                        timestamp: Date.now()
-                    }
-                }
-            },
-            { upsert: true }
-        );
-
-        return response.data.result.pay_url;
-    } catch (err) {
-        console.error('Ошибка при создании инвойса HOT/OUT TU:', err.response?.data || err.message);
-        return null;
-    }
-}
-
 // Создание инвойса для UKR FIRSTMAIL
 async function createUkrMailInvoice(userId, quantity) {
     try {
@@ -1396,20 +1267,6 @@ async function checkUsaMailPayment(invoiceId) {
         return response.data.result.items[0];
     } catch (err) {
         console.error('Ошибка при проверке оплаты USA FIRSTMAIL:', err);
-        return null;
-    }
-}
-
-async function checkTuMailPayment(invoiceId) {
-    try {
-        const response = await axios.get(`https://pay.crypt.bot/api/getInvoices?invoice_ids=${invoiceId}`, {
-            headers: {
-                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN
-            }
-        });
-        return response.data.result.items[0];
-    } catch (err) {
-        console.error('Ошибка при проверке оплаты HOT/OUT TU:', err);
         return null;
     }
 }
@@ -1626,63 +1483,6 @@ async function handleSuccessfulGmailKeyPayment(userId, transactionId) {
     return true;
 }
 
-async function handleSuccessfulTuMailPayment(userId, transactionId) {
-    const usersCollection = await users();
-    const tuMailsCollection = await tuMails();
-
-    const user = await usersCollection.findOne({ user_id: userId });
-    if (!user || !user.tu_mail_transactions || !user.tu_mail_transactions[transactionId]) {
-        return false;
-    }
-
-    const quantity = user.tu_mail_transactions[transactionId].quantity;
-
-    // Получаем аккаунты для продажи
-    const tuMailsToSell = await tuMailsCollection.aggregate([
-        { $sample: { size: quantity } }
-    ]).toArray();
-
-    if (tuMailsToSell.length < quantity) {
-        await usersCollection.updateOne(
-            { user_id: userId },
-            { $set: { [`tu_mail_transactions.${transactionId}.status`]: 'failed' } }
-        );
-
-        await bot.sendMessage(userId,
-            `❌ Недостаточно HOT/OUT TU аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-            { parse_mode: 'HTML' });
-        return false;
-    }
-
-    // Создаем текстовый файл с аккаунтами
-    const accountsText = tuMailsToSell.map(e => e.raw).join('\n\n');
-    const buffer = Buffer.from(accountsText, 'utf8');
-
-    await usersCollection.updateOne(
-        { user_id: userId },
-        {
-            $push: { tu_mails: { $each: tuMailsToSell.map(e => e.raw) } },
-            $set: {
-                [`tu_mail_transactions.${transactionId}.status`]: 'completed',
-                [`tu_mail_transactions.${transactionId}.accounts`]: tuMailsToSell.map(e => e.raw)
-            }
-        }
-    );
-
-    // Удаляем выданные аккаунты
-    await tuMailsCollection.deleteMany({
-        _id: { $in: tuMailsToSell.map(e => e._id) }
-    });
-
-    // Отправляем файл пользователю
-    await bot.sendDocument(userId, buffer, {
-        filename: `hot_out_tu_${quantity}_accounts.txt`,
-        caption: `🎉 Оплата подтверждена!\nВаши ${quantity} HOT/OUT TU аккаунтов в прикрепленном файле.`
-    });
-
-    return true;
-}
-
 // Обработка успешной оплаты USA FIRSTMAIL
 async function handleSuccessfulUsaMailPayment(userId, transactionId) {
     const usersCollection = await users();
@@ -1736,35 +1536,6 @@ async function handleSuccessfulUsaMailPayment(userId, transactionId) {
     return true;
 }
 
-if (data === 'buy_tu_mail') {
-    const tuMailCount = await (await tuMails()).countDocuments();
-    if (tuMailCount === 0) {
-        return bot.answerCallbackQuery(callbackQuery.id, {
-            text: 'HOT/OUT TU почты временно закончились. Попробуйте позже.',
-            show_alert: true
-        });
-    }
-    await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-    return sendTuMailQuantityMenu(chatId);
-}
-
-if (data.startsWith('tu_mail_quantity_')) {
-    const quantity = parseInt(data.split('_')[3]);
-    const invoiceUrl = await createTuMailInvoice(chatId, quantity);
-
-    if (!invoiceUrl) {
-        return bot.answerCallbackQuery(callbackQuery.id, {
-            text: 'Ошибка при создании платежа. Попробуйте позже.',
-            show_alert: true
-        });
-    }
-
-    await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-    await sendTuMailPaymentMenu(chatId, invoiceUrl, quantity);
-    return bot.answerCallbackQuery(callbackQuery.id);
-}
-
-
 // Обработка успешной оплаты UKR FIRSTMAIL
 async function handleSuccessfulUkrMailPayment(userId, transactionId) {
     const usersCollection = await users();
@@ -1817,7 +1588,6 @@ async function handleSuccessfulUkrMailPayment(userId, transactionId) {
 
     return true;
 }
-
 // Периодическая проверка оплаты с защитой от дублирования iCloud/FIRSTMAIL/USA/UKR
 setInterval(async () => {
     try {
@@ -1875,28 +1645,6 @@ for (const user of usersWithTgPasing) {
                 { user_id: user.user_id },
                 { $set: { 'tg_pasing_transaction.status': 'expired' } }
             );
-        }
-    }
-}
-
-// Добавьте этот блок в setInterval
-const usersWithTuMail = await usersCollection.find({
-    "tu_mail_transactions": { $exists: true }
-}).toArray();
-
-for (const user of usersWithTuMail) {
-    for (const [transactionId, transaction] of Object.entries(user.tu_mail_transactions)) {
-        if (transaction.status === 'pending' && transaction.invoiceId) {
-            const invoice = await checkTuMailPayment(transaction.invoiceId);
-
-            if (invoice?.status === 'paid') {
-                await handleSuccessfulTuMailPayment(user.user_id, transactionId);
-            } else if (invoice?.status === 'expired') {
-                await usersCollection.updateOne(
-                    { user_id: user.user_id },
-                    { $set: { [`tu_mail_transactions.${transactionId}.status`]: 'expired' } }
-                );
-            }
         }
     }
 }
@@ -2236,18 +1984,6 @@ bot.on('callback_query', async (callbackQuery) => {
 if (data === 'tg_pasing_category') {
     await bot.deleteMessage(chatId, callbackQuery.message.message_id);
     return sendTgPasingMenu(chatId);
-
-}
-
-// Добавьте этот case в обработчик callback_query
-if (data === 'tu_mail_category') {
-    await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-    return sendTuMailMenu(chatId);
-}
-
-// Добавьте это рядом с другими коллекциями
-tuMails: async () => {
-    return (await connect()).collection('tu_mails');
 }
 
 // Описание функций TG PASING
@@ -2398,8 +2134,6 @@ if (data === 'tg_pasing_info') {
             return sendUkrMailQuantityMenu(chatId);
         }
 
-
-
         // Выбор количества iCloud
         if (data.startsWith('quantity_')) {
             const quantity = parseInt(data.split('_')[1]);
@@ -2529,8 +2263,6 @@ if (data === 'tg_pasing_info') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendMyFirstmailsMenu(chatId);
         }
-
-
 
         // Мои usa mail
         if (data === 'my_usa_mails') {
@@ -2811,36 +2543,6 @@ bot.onText(/\/add_gmail (.+)/, async (msg, match) => {
     const count = await gmailKeysCollection.countDocuments();
     bot.sendMessage(msg.chat.id,
         `✅ Добавлено: ${result.insertedCount}\n🇺🇸 Всего USA FIRSTMAIL: ${count}`);
-});
-
-bot.onText(/\/add_tu (.+)/, async (msg, match) => {
-    if (!isAdmin(msg.from.id)) return;
-
-    const tuMailsCollection = await tuMails();
-    const newTuMails = match[1].split(',').map(e => e.trim()).filter(e => e);
-
-    const toInsert = newTuMails.map(raw => ({ raw }));
-
-    const result = await tuMailsCollection.insertMany(toInsert, { ordered: false });
-    const count = await tuMailsCollection.countDocuments();
-    bot.sendMessage(msg.chat.id,
-        `✅ Добавлено: ${result.insertedCount}\n🔥 Всего HOT/OUT TU: ${count}`);
-});
-
-
-bot.onText(/\/tu_status/, async (msg) => {
-    if (!isAdmin(msg.from.id)) return;
-
-    const tuMailsCollection = await tuMails();
-    const count = await tuMailsCollection.countDocuments();
-    const first50 = await tuMailsCollection.find().limit(50).toArray();
-
-    let message = `🔥 Всего HOT/OUT TU: ${count}\n\n`;
-    message += first50.map(e => e.raw).join('\n\n');
-
-    if (count > 50) message += '\n\n...и другие (показаны первые 50)';
-
-    bot.sendMessage(msg.chat.id, message);
 });
 
 // Добавление почт USA FIRSTMAIL
