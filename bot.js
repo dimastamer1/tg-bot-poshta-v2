@@ -513,23 +513,24 @@ async function sendEmailsMenu(chatId) {
 async function sendTuMailMenu(chatId) {
     const tuMailCount = await (await tuMails()).countDocuments();
 
-    const text = `🔥 <b>HOT/OUT TU ПОЧТЫ (${tuMailCount}шт)</b>\n\n` +
-        `<b>Особенности:</b>\n` +
-        `✅ Готовые к использованию аккаунты\n` +
-        `✅ Полный доступ ко всем данным\n` +
-        `✅ Уникальные комбинации\n\n` +
-        `Цена: <b>0.10 USDT</b> за 1 аккаунт\n\n` +
-        `Выберите действие:`;
+   const text = `🔥 <b>HOT/OUT TU ПОЧТЫ (${tuMailCount}шт)</b>\n\n` +
+`📌 <b>Универсальные почты TU/HOTMAIL</b>\n` +
+`┣ 🔥 Гарантия 24ч при невалиде\n` +
+`┣ 🌍 Под любое GEO (США/Европа/Азия)\n` +
+`┗ 💯 Проверено: 50+ успешных заливов\n\n` +
 
-    const options = {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: '💰 КУПИТЬ HOT/OUT TU 💰', callback_data: 'buy_tu_mail' }],
-                [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
-            ]
-        }
-    };
+`⚡ <b>ОСОБЕННОСТИ:</b>\n` +
+`▫️ Время жизни: <b>6-12 часов</b>\n` +
+`▫️ Формат: <code>email:pass:доп.данные</code>\n` +
+`▫️ Залив в TikTok/другие соцсети\n\n` +
+
+`🎁 <b>БОНУС:</b> При покупке 50+ почт\n` +
+`┗ Получаете <b>инструкцию по заливу, без теней, (Гео ИТАЛИЯ,КЗ) связка!</b>\n\n` +
+
+`💵 <b>Цена:</b> <code>0.10 USDT</code> за ОДНУ почту\n\n` +
+
+`⚠️ <i>Заливайте сразу после покупки!</i>\n` +
+`<i>Замена в течение 24 часов</i>`;
 
     return bot.sendMessage(chatId, text, options);
 }
@@ -1707,7 +1708,7 @@ async function handleSuccessfulTuMailPayment(userId, transactionId) {
             for (let i = 0; i < tuMailsToSell.length; i += chunkSize) {
                 const chunk = tuMailsToSell.slice(i, i + chunkSize);
                 await bot.sendMessage(userId, 
-                    `Аккаунты (${i+1}-${i+chunk.length} из ${tuMailsToSell.length}):\n` + 
+                    `ПОЧТЫ (${i+1}-${i+chunk.length} из ${tuMailsToSell.length}):\n` + 
                     chunk.map(e => `📌 ${e.raw}`).join('\n\n'),
                     { parse_mode: 'HTML' }
                 );
