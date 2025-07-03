@@ -532,6 +532,17 @@ async function sendTuMailMenu(chatId) {
 `⚠️ <i>Заливайте сразу после покупки!</i>\n` +
 `<i>Замена в течение 24 часов</i>`;
 
+  const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💰 КУПИТЬ HOT/OUT TU 💰', callback_data: 'buy_tu_mail' }],
+                [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
+            ]
+        }
+    };
+
+
     return bot.sendMessage(chatId, text, options);
 }
 
