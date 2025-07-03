@@ -1672,6 +1672,7 @@ async function handleSuccessfulTuMailPayment(userId, transactionId) {
     const tuMailsCollection = await tuMails();
 
     try {
+        // 1. Проверяем существование транзакции
         const user = await usersCollection.findOne({ user_id: userId });
         if (!user?.tu_mail_transactions?.[transactionId]) {
             console.error(`Транзакция не найдена для пользователя ${userId}`);
@@ -1679,82 +1680,141 @@ async function handleSuccessfulTuMailPayment(userId, transactionId) {
         }
 
         const quantity = user.tu_mail_transactions[transactionId].quantity;
+        
+        // 2. Получаем случайные почты из базы
         const tuMailsToSell = await tuMailsCollection.aggregate([
             { $sample: { size: quantity } }
         ]).toArray();
 
-        // Проверка количества
+        // 3. Проверяем достаточное количество
         if (tuMailsToSell.length < quantity) {
             await usersCollection.updateOne(
                 { user_id: userId },
-                { $set: { [`tu_mail_transactions.${transactionId}.status`]: 'failed' }
-            });
+                { $set: { [`tu_mail_transactions.${transactionId}.status`]: 'failed' }}
+            );
             
-            await bot.sendMessage(userId,
-                "❌ Недостаточно аккаунтов в пуле. Обратитесь в поддержку @igor_Potekov",
-                { parse_mode: 'HTML' });
+            await bot.sendMessage(
+                userId,
+                "❌ Недостаточно почт в пуле. Обратитесь в поддержку @igor_Potekov",
+                { parse_mode: 'HTML' }
+            );
             return false;
         }
 
-        // Формируем файл
-        const accountsText = tuMailsToSell.map(e => e.raw).join('\n\n');
+        // 4. Формируем содержимое файла
+        const accountsText = tuMailsToSell.map(e => {
+            const [email, password, ...rest] = e.raw.split(':');
+            return `Email: ${email}\nPassword: ${password}\nДополнительно: ${rest.join(':')}\n`;
+        }).join('\n');
+
         const buffer = Buffer.from(accountsText, 'utf8');
         
-        // Логируем перед отправкой
-        console.log(`Пытаемся отправить ${quantity} аккаунтов пользователю ${userId}`);
-
-        // Пробуем отправить файл
+        // 5. Создаем Readable Stream для файла (более надежный способ)
+        const { Readable } = require('stream');
+        const stream = Readable.from(buffer);
+        
+        // 6. Отправка файла с улучшенной обработкой
         try {
-            await bot.sendDocument(userId, buffer, {
-                filename: `hot_out_tu_${quantity}_accounts.txt`,
-                caption: `🎉 Оплата подтверждена!\nВаши ${quantity} HOT/OUT TU аккаунтов:`
-            });
+            await bot.sendDocument(
+                userId,
+                { source: stream, filename: `TU_почты_${quantity}шт.txt` },
+                {
+                    caption: `🎉 Оплата подтверждена!\n` +
+                    `📦 Ваши ${quantity} HOT/OUT TU аккаунтов\n` +
+                    `⏳ Время жизни: 6-12 часов\n` +
+                    `⚠️ Заливайте сразу после получения!`,
+                    parse_mode: 'HTML'
+                }
+            );
             
             console.log(`Файл успешно отправлен пользователю ${userId}`);
-        } catch (sendError) {
-            console.error(`Ошибка отправки файла пользователю ${userId}:`, sendError);
             
-            // Если не удалось отправить файл - отправляем текстом
-            const chunkSize = 5; // По 5 аккаунтов в сообщении
-            for (let i = 0; i < tuMailsToSell.length; i += chunkSize) {
-                const chunk = tuMailsToSell.slice(i, i + chunkSize);
-                await bot.sendMessage(userId, 
-                    `ПОЧТЫ (${i+1}-${i+chunk.length} из ${tuMailsToSell.length}):\n` + 
-                    chunk.map(e => `📌 ${e.raw}`).join('\n\n'),
+        } catch (sendError) {
+            console.error('Ошибка отправки файла:', sendError);
+            
+            // Альтернативный вариант через временный файл
+            const fs = require('fs');
+            const path = `./temp_${userId}_${Date.now()}.txt`;
+            
+            try {
+                fs.writeFileSync(path, accountsText);
+                await bot.sendDocument(
+                    userId,
+                    path,
+                    {
+                        caption: `🎉 Ваши ${quantity} HOT/OUT TU аккаунтов`,
+                        parse_mode: 'HTML'
+                    }
+                );
+                fs.unlinkSync(path); // Удаляем временный файл
+                
+            } catch (fileError) {
+                console.error('Ошибка при работе с файлом:', fileError);
+                
+                // В крайнем случае - разбиваем на части
+                const parts = [];
+                for (let i = 0; i < tuMailsToSell.length; i += 3) {
+                    parts.push(tuMailsToSell.slice(i, i + 3));
+                }
+                
+                await bot.sendMessage(
+                    userId,
+                    "⚠️ Не удалось отправить файл. Вот ваши аккаунты:",
                     { parse_mode: 'HTML' }
                 );
+                
+                for (const part of parts) {
+                    await bot.sendMessage(
+                        userId,
+                        part.map(e => `📌 ${e.raw}`).join('\n\n'),
+                        { parse_mode: 'HTML' }
+                    );
+                }
             }
         }
 
-        // Обновляем статус транзакции
+        // 7. Обновляем статус транзакции
         await usersCollection.updateOne(
             { user_id: userId },
             {
                 $push: { tu_mails: { $each: tuMailsToSell.map(e => e.raw) } },
                 $set: {
                     [`tu_mail_transactions.${transactionId}.status`]: 'completed',
-                    [`tu_mail_transactions.${transactionId}.accounts`]: tuMailsToSell.map(e => e.raw)
+                    [`tu_mail_transactions.${transactionId}.accounts`]: tuMailsToSell.map(e => e.raw),
+                    last_purchase: new Date()
                 }
             }
         );
 
-        // Удаляем выданные аккаунты
+        // 8. Удаляем выданные аккаунты
         await tuMailsCollection.deleteMany({
             _id: { $in: tuMailsToSell.map(e => e._id) }
         });
 
+    // 9. Отправляем инструкцию, если куплено 50+ почт
+        if (quantity >= 50) {
+            await bot.sendMessage(
+                userId,
+            
+                `4. Используйте аккаунты в течение 6 часов\n\n` +
+                `💡 Купили 50+? пиши мне - @igor_Potekov - выдам связку по заливу почт данных!`,
+                { parse_mode: 'HTML' }
+            );
+        }
+
         return true;
 
     } catch (err) {
-        console.error('Критическая ошибка в handleSuccessfulTuMailPayment:', err);
+        console.error('Критическая ошибка:', err);
         
-        // Пытаемся уведомить пользователя об ошибке
         try {
-            await bot.sendMessage(userId,
-                "⚠️ Произошла ошибка при обработке вашего заказа. Пожалуйста, обратитесь в поддержку @igor_Potekov",
-                { parse_mode: 'HTML' });
+            await bot.sendMessage(
+                userId,
+                "⚠️ Произошла ошибка при обработке заказа. Пожалуйста, обратитесь в поддержку @igor_Potekov",
+                { parse_mode: 'HTML' }
+            );
         } catch (e) {
-            console.error('Не удалось уведомить пользователя об ошибке:', e);
+            console.error('Не удалось уведомить пользователя:', e);
         }
         
         return false;
