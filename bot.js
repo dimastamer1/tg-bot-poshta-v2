@@ -112,13 +112,14 @@ async function sendCategoriesMenu(chatId, messageId = null) {
         `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n`+
         `Оплата у нас CryptoBot - usdt\n\n`+
         `Удачных покупок, и удачного залива!\n\n`+
+        `ЧТОБЫ ПОЛУЧИТЬ КОД С ПОЧТЫ, СКИДАЙТЕ ФОРМАТ ТОТ КОТОРЫЙ ВАМ ВЫДАЕТ БОТ, ПРЯМО В ЭТОГО ЖЕ БОТА И ОН ВАМ ВЫДАСТ КОД!\n\n`+
         `Выберите нужную категорию:`;
 
     const options = {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: `🔥 TRUST SPECIAL 24H+ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
+                [{ text: `🔥 TRUST SPECIAL 24H+ (G) (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
             ]
         }
@@ -149,7 +150,7 @@ async function sendTrustSpecialMenu(chatId) {
     const text = `🔥 <b>TRUST SPECIAL 24H+ (${trustSpecialCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
         `✅ • Купить TRUST SPECIAL 24H+ аккаунты\n\n` +
-        `Цена: <b>7 рублей</b> или <b>0.09 USDT</b> за 1 аккаунт\n\n` +
+        `Цена: <b>5 рублей</b> или <b>0.07 USDT</b> за 1 аккаунт\n\n` +
         `Выберите действие:`;
 
     const options = {
@@ -183,7 +184,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество TRUST SPECIAL аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${maxAvailable}</b> аккаунтов\n` +
-        `Цена: <b>7 Рублей</b> или <b>0.09 USDT</b> за 1 аккаунт`;
+        `Цена: <b>5 Рублей</b> или <b>0.07 USDT</b> за 1 аккаунт`;
 
     const options = {
         parse_mode: 'HTML',
@@ -197,7 +198,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
 // Меню оплаты TRUST SPECIAL
 async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.09 * quantity).toFixed(2);
+    const totalAmount = (0.07 * quantity).toFixed(2);
 
     const text = `💳 <b>Оплата ${quantity} TRUST SPECIAL аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
@@ -220,7 +221,7 @@ async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
 async function createTrustSpecialInvoice(userId, quantity) {
     try {
         const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
-        const amount = 0.09 * quantity;
+        const amount = 0.07 * quantity;
 
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
@@ -586,8 +587,40 @@ bot.onText(/\/start/, async (msg) => {
         },
         { upsert: true }
     );
+    
+    // ДОБАВИТЬ ЭТУ СТРОКУ:
+    await sendMainMenu(chatId, false, msg);
 });
 
+// Команда рассылки
+bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    const message = match[1];
+    const usersCollection = await users();
+    const allUsers = await usersCollection.find({}).toArray();
+    
+    let success = 0;
+    let failed = 0;
+    
+    for (const user of allUsers) {
+        try {
+            await bot.sendMessage(user.user_id, `📢 <b>РАССЫЛКА:</b>\n\n${message}`, {
+                parse_mode: 'HTML'
+            });
+            success++;
+        } catch (error) {
+            console.error(`Не удалось отправить сообщение пользователю ${user.user_id}:`, error);
+            failed++;
+        }
+        
+        // Задержка чтобы не спамить слишком быстро
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    bot.sendMessage(msg.chat.id, 
+        `✅ Рассылка завершена:\nУспешно: ${success}\nНе удалось: ${failed}`);
+});
 // Админские команды
 // Добавление TRUST SPECIAL аккаунтов
 bot.onText(/\/kz (.+)/, async (msg, match) => {
