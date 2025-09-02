@@ -4,7 +4,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import express from 'express';
 import config from './config.js';
-import { connect, emails, users, firstmails, usaMails, ukrMails, gmailKeys, tuMails, trustSpecials } from './db.js';
+import { connect, users, trustSpecials } from './db.js';
 
 // Проверка подключения при старте
 connect().then(() => {
@@ -34,10 +34,6 @@ app.get('/', (req, res) => {
     res.send('Бот работает в режиме polling!');
 });
 
-// Health check эндпоинт
-app.get('/', (req, res) => {
-    res.send('UBT TikTok Bot is running!');
-});
 
 // Проверка является ли пользователь админом
 function isAdmin(userId) {
