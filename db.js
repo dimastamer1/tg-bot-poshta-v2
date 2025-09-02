@@ -15,6 +15,12 @@ async function connect() {
   return db;
 }
 
+
+// Получить коллекцию TRUST SPECIAL
+async function trustSpecials() {
+  return (await connect()).collection('trust_specials');
+}
+
 // Получить коллекцию TU MAILS
 async function tuMails() {
   return (await connect()).collection('tu_mails');
@@ -178,6 +184,7 @@ export {
   usaMails,
   ukrMails,
   gmailKeys,
+  trustSpecials,
   readEmailsPool,
   writeEmailsPool,
   readFirstmailsPool,
