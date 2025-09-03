@@ -761,23 +761,68 @@ bot.on('message', async (msg) => {
     delete adminBroadcastState[adminChatId];
 });
 // Админские команды
-// Добавление TRUST SPECIAL аккаунтов
+// ===== Добавление TRUST SPECIAL аккаунтов =====
+bot.onText(/\/kz$/, async (msg) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с аккаунтами в формате:\nemail|phone|username|key|country");
+});
+
+// Если команда с аргументами (через текст)
 bot.onText(/\/kz (.+)/, async (msg, match) => {
     if (!isAdmin(msg.from.id)) return;
 
     const trustSpecialsCollection = await trustSpecials();
     const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
 
-    // Формат: email|phone|username|key|country
-    const toInsert = newAccounts.map(str => {
-        return { raw: str.trim() };
-    });
+    const toInsert = newAccounts.map(str => ({ raw: str }));
 
     const result = await trustSpecialsCollection.insertMany(toInsert, { ordered: false });
     const count = await trustSpecialsCollection.countDocuments();
+
     bot.sendMessage(msg.chat.id,
         `✅ Добавлено: ${result.insertedCount}\n🔥 Всего TRUST SPECIAL: ${count}`);
 });
+
+// Если кидают файл .txt после команды /kz
+bot.on('document', async (msg) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    const fileId = msg.document.file_id;
+    const fileName = msg.document.file_name || "";
+
+    // Проверяем расширение
+    if (!fileName.endsWith(".txt")) {
+        return bot.sendMessage(msg.chat.id, "⚠️ Пришли файл в формате .txt");
+    }
+
+    try {
+        const file = await bot.getFile(fileId);
+        const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_TOKEN}/${file.file_path}`;
+
+        const res = await fetch(fileUrl);
+        const text = await res.text();
+
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+
+        if (!lines.length) {
+            return bot.sendMessage(msg.chat.id, "❌ Файл пустой!");
+        }
+
+        const trustSpecialsCollection = await trustSpecials();
+        const toInsert = lines.map(str => ({ raw: str }));
+
+        const result = await trustSpecialsCollection.insertMany(toInsert, { ordered: false });
+        const count = await trustSpecialsCollection.countDocuments();
+
+        bot.sendMessage(msg.chat.id,
+            `✅ Из файла добавлено: ${result.insertedCount}\n🔥 Всего TRUST SPECIAL: ${count}`);
+    } catch (err) {
+        console.error("Ошибка при обработке файла:", err);
+        bot.sendMessage(msg.chat.id, "❌ Ошибка при чтении файла");
+    }
+});
+
 
 // Статус пула TRUST SPECIAL
 bot.onText(/\/trust_status/, async (msg) => {
