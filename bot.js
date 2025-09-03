@@ -6,6 +6,9 @@ import express from 'express';
 import config from './config.js';
 import { connect, users, trustSpecials } from './db.js';
 
+// Добавьте в начало файла (после импортов):
+const adminBroadcastState = {};
+
 // Проверка подключения при старте
 connect().then(() => {
     console.log('✅ Проверка подключения к MongoDB успешна');
@@ -595,33 +598,167 @@ bot.onText(/\/start/, async (msg) => {
 });
 
 // Команда рассылки
-bot.onText(/\/broadcast (.+)/, async (msg, match) => {
+bot.onText(/\/broadcast/, async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
-    const message = match[1];
+    // Сохраняем chat_id админа для ответа
+    const adminChatId = msg.chat.id;
+    
+    // Просим админа отправить контент для рассылки
+    await bot.sendMessage(adminChatId, 
+        '📢 <b>Отправьте контент для рассылки:</b>\n\n' +
+        '• Текст сообщения\n' +
+        '• Фото с подписью\n' + 
+        '• Видео\n' +
+        '• Голосовое сообщение\n' +
+        '• Документ\n' +
+        '• Стикер\n\n' +
+        'Я перешлю это всем пользователям.',
+        {parse_mode: 'HTML'}
+    );
+
+    // Сохраняем состояние ожидания контента
+    adminBroadcastState[adminChatId] = {
+        waitingForContent: true,
+        messageType: 'broadcast'
+    };
+});
+
+// Обработчик входящих сообщений для рассылки
+bot.on('message', async (msg) => {
+    if (!msg.from || !adminBroadcastState[msg.chat.id] || !adminBroadcastState[msg.chat.id].waitingForContent) {
+        return;
+    }
+
+    const adminChatId = msg.chat.id;
     const usersCollection = await users();
     const allUsers = await usersCollection.find({}).toArray();
     
     let success = 0;
     let failed = 0;
-    
-    for (const user of allUsers) {
-        try {
-            await bot.sendMessage(user.user_id, `📢 <b>РАССЫЛКА:</b>\n\n${message}`, {
-                parse_mode: 'HTML'
-            });
-            success++;
-        } catch (error) {
-            console.error(`Не удалось отправить сообщение пользователю ${user.user_id}:`, error);
-            failed++;
+
+    try {
+        // Обработка разных типов контента
+        if (msg.text && !msg.text.startsWith('/')) {
+            // Текстовое сообщение
+            for (const user of allUsers) {
+                try {
+                    await bot.sendMessage(user.user_id, `📢 <b>РАССЫЛКА:</b>\n\n${msg.text}`, {
+                        parse_mode: 'HTML'
+                    });
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить текст пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
         }
-        
-        // Задержка чтобы не спамить слишком быстро
-        await new Promise(resolve => setTimeout(resolve, 100));
+        else if (msg.photo) {
+            // Фото с подписью
+            const photo = msg.photo[msg.photo.length - 1]; // Берем самое качественное фото
+            const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
+            
+            for (const user of allUsers) {
+                try {
+                    await bot.sendPhoto(user.user_id, photo.file_id, {
+                        caption: caption,
+                        parse_mode: 'HTML'
+                    });
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить фото пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        else if (msg.video) {
+            // Видео
+            const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
+            
+            for (const user of allUsers) {
+                try {
+                    await bot.sendVideo(user.user_id, msg.video.file_id, {
+                        caption: caption,
+                        parse_mode: 'HTML'
+                    });
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить видео пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        else if (msg.voice) {
+            // Голосовое сообщение
+            for (const user of allUsers) {
+                try {
+                    await bot.sendVoice(user.user_id, msg.voice.file_id, {
+                        caption: '📢 <b>РАССЫЛКА</b>',
+                        parse_mode: 'HTML'
+                    });
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить голосовое пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        else if (msg.document) {
+            // Документ
+            const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
+            
+            for (const user of allUsers) {
+                try {
+                    await bot.sendDocument(user.user_id, msg.document.file_id, {
+                        caption: caption,
+                        parse_mode: 'HTML'
+                    });
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить документ пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        else if (msg.sticker) {
+            // Стикер
+            for (const user of allUsers) {
+                try {
+                    await bot.sendSticker(user.user_id, msg.sticker.file_id);
+                    success++;
+                } catch (error) {
+                    console.error(`Не удалось отправить стикер пользователю ${user.user_id}:`, error);
+                    failed++;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        else {
+            await bot.sendMessage(adminChatId, '❌ Неподдерживаемый тип сообщения для рассылки');
+            delete adminBroadcastState[adminChatId];
+            return;
+        }
+
+        // Отправляем отчет админу
+        await bot.sendMessage(adminChatId, 
+            `✅ Рассылка завершена:\n\n` +
+            `👥 Получили: ${success}\n` +
+            `❌ Не получили: ${failed}\n` +
+            `📊 Всего пользователей: ${allUsers.length}`
+        );
+
+    } catch (error) {
+        console.error('Ошибка при рассылке:', error);
+        await bot.sendMessage(adminChatId, '❌ Произошла ошибка при рассылке');
     }
-    
-    bot.sendMessage(msg.chat.id, 
-        `✅ Рассылка завершена:\nУспешно: ${success}\nНе удалось: ${failed}`);
+
+    // Сбрасываем состояние
+    delete adminBroadcastState[adminChatId];
 });
 // Админские команды
 // Добавление TRUST SPECIAL аккаунтов
