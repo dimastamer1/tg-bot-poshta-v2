@@ -124,7 +124,7 @@ async function sendCategoriesMenu(chatId, messageId = null) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: `🔥 TRUST SPECIAL 24H+ (G) (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
+                [{ text: `⭐️ TRUST NEW SPECIAL 1H+ (G) ⭐️ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
             ]
         }
@@ -154,8 +154,8 @@ async function sendTrustSpecialMenu(chatId) {
 
     const text = `🔥 <b>TRUST SPECIAL 24H+ (${trustSpecialCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
-        `✅ • Купить TRUST SPECIAL 24H+ аккаунты\n\n` +
-        `Цена: <b>7 рублей</b> или <b>0.09 USDT</b> за 1 аккаунт\n\n` +
+        `✅ • Купить TRUST SPECIAL 1H+ аккаунты\n\n` +
+        `Цена: <b>10 рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
         `Выберите действие:`;
 
     const options = {
@@ -189,7 +189,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество TRUST SPECIAL аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${maxAvailable}</b> аккаунтов\n` +
-        `Цена: <b>7 Рублей</b> или <b>0.09 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
     const options = {
         parse_mode: 'HTML',
@@ -203,7 +203,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
 // Меню оплаты TRUST SPECIAL
 async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.09 * quantity).toFixed(2);
+    const totalAmount = (0.12 * quantity).toFixed(2);
 
     const text = `💳 <b>Оплата ${quantity} TRUST SPECIAL аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
@@ -226,7 +226,7 @@ async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
 async function createTrustSpecialInvoice(userId, quantity) {
     try {
         const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
-        const amount = 0.09 * quantity;
+        const amount = 0.12 * quantity;
 
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
