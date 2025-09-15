@@ -5,6 +5,8 @@ import { simpleParser } from 'mailparser';
 import express from 'express';
 import config from './config.js';
 import { connect, users, trustSpecials } from './db.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 // Добавьте в начало файла (после импортов):
 const adminBroadcastState = {};
@@ -33,11 +35,9 @@ const CRYPTOBOT_API_TOKEN = config.cryptoBotToken;
 // Middleware для обработки JSON
 app.use(express.json());
 
-app.use(express.json());
 app.get('/', (req, res) => {
     res.send('Бот работает в режиме polling!');
 });
-
 
 // Проверка является ли пользователь админом
 function isAdmin(userId) {
@@ -67,8 +67,8 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
     const welcomeText = `👋 <b>Добро пожаловать, вы находитесь в боте, сделанном под UBT для спама TikTok!</b>\n\n` +
         `<b>Тут вы можете:</b>\n` +
         `• Купить USA (F) 0-24Ч аккаунты\n` +
-        `⚠️ Бот новый, возможны временные перебои\n\n`
-         +`⚠️ ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n` +
+        `⚠️ Бот новый, возможны временные перебои\n\n` +
+        `⚠️ ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n` +
         `🎉 <b>ЧАСТО СКИДКИ, БОНУСЫ</b> часто связки, инфо поводы😱`;
 
     const options = {
@@ -114,11 +114,11 @@ async function sendCategoriesMenu(chatId, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
 
     const text = `📂 <b>КАТЕГОРИИ</b>\n\n` +
-        `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n`+
-        `Оплата у нас CryptoBot - usdt\n\n`+
-        `Удачных покупок, и удачного залива!\n\n`+
-        `ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n`+
-        `ЧТОБЫ ПОЛУЧИТЬ КОД С ПОЧТЫ, СКИДАЙТЕ ФОРМАТ ТОТ КОТОРЫЙ ВАМ ВЫДАЕТ БОТ, ПРЯМО В ЭТОГО ЖЕ БОТА И ОН ВАМ ВЫДАСТ КОД!\n\n`+
+        `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n` +
+        `Оплата у нас CryptoBot - usdt\n\n` +
+        `Удачных покупок, и удачного залива!\n\n` +
+        `ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n` +
+        `ЧТОБЫ ПОЛУЧИТЬ КОД С ПОЧТЫ, СКИДАЙТЕ ФОРМАТ ТОТ КОТОРЫЙ ВАМ ВЫДАЕТ БОТ, ПРЯМО В ЭТОГО ЖЕ БОТА И ОН ВАМ ВЫДАСТ КОД!\n\n` +
         `Выберите нужную категорию:`;
 
     const options = {
@@ -334,12 +334,29 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
-        `🎉 <b>Спасибо за покупку TRUST SPECIAL аккаунтов!</b>\n\n` +
+        `🎉 <b>Спасибо за покупку ${quantity} TRUST SPECIAL аккаунтов!</b>\n\n` +
         `Ваши аккаунты:`,
         { parse_mode: 'HTML' });
 
-    for (const account of accountsToSell) {
-        await bot.sendMessage(userId, account.raw);
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `trust_special_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} TRUST SPECIAL аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
     }
 
     return true;
@@ -604,8 +621,7 @@ bot.onText(/\/start/, async (msg) => {
         },
         { upsert: true }
     );
-    
-    // ДОБАВИТЬ ЭТУ СТРОКУ:
+
     await sendMainMenu(chatId, false, msg);
 });
 
@@ -615,18 +631,18 @@ bot.onText(/\/broadcast/, async (msg) => {
 
     // Сохраняем chat_id админа для ответа
     const adminChatId = msg.chat.id;
-    
+
     // Просим админа отправить контент для рассылки
-    await bot.sendMessage(adminChatId, 
+    await bot.sendMessage(adminChatId,
         '📢 <b>Отправьте контент для рассылки:</b>\n\n' +
         '• Текст сообщения\n' +
-        '• Фото с подписью\n' + 
+        '• Фото с подписью\n' +
         '• Видео\n' +
         '• Голосовое сообщение\n' +
         '• Документ\n' +
         '• Стикер\n\n' +
         'Я перешлю это всем пользователям.',
-        {parse_mode: 'HTML'}
+        { parse_mode: 'HTML' }
     );
 
     // Сохраняем состояние ожидания контента
@@ -673,7 +689,7 @@ bot.on('message', async (msg) => {
     const adminChatId = msg.chat.id;
     const usersCollection = await users();
     const allUsers = await usersCollection.find({}).toArray();
-    
+
     let success = 0;
     let failed = 0;
 
@@ -693,12 +709,11 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else if (msg.photo) {
+        } else if (msg.photo) {
             // Фото с подписью
             const photo = msg.photo[msg.photo.length - 1]; // Берем самое качественное фото
             const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
-            
+
             for (const user of allUsers) {
                 try {
                     await bot.sendPhoto(user.user_id, photo.file_id, {
@@ -712,11 +727,10 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else if (msg.video) {
+        } else if (msg.video) {
             // Видео
             const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
-            
+
             for (const user of allUsers) {
                 try {
                     await bot.sendVideo(user.user_id, msg.video.file_id, {
@@ -730,8 +744,7 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else if (msg.voice) {
+        } else if (msg.voice) {
             // Голосовое сообщение
             for (const user of allUsers) {
                 try {
@@ -746,11 +759,10 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else if (msg.document) {
+        } else if (msg.document) {
             // Документ
             const caption = msg.caption ? `📢 <b>РАССЫЛКА:</b>\n\n${msg.caption}` : '📢 <b>РАССЫЛКА</b>';
-            
+
             for (const user of allUsers) {
                 try {
                     await bot.sendDocument(user.user_id, msg.document.file_id, {
@@ -764,8 +776,7 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else if (msg.sticker) {
+        } else if (msg.sticker) {
             // Стикер
             for (const user of allUsers) {
                 try {
@@ -777,15 +788,14 @@ bot.on('message', async (msg) => {
                 }
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
-        }
-        else {
+        } else {
             await bot.sendMessage(adminChatId, '❌ Неподдерживаемый тип сообщения для рассылки');
             delete adminBroadcastState[adminChatId];
             return;
         }
 
         // Отправляем отчет админу
-        await bot.sendMessage(adminChatId, 
+        await bot.sendMessage(adminChatId,
             `✅ Рассылка завершена:\n\n` +
             `👥 Получили: ${success}\n` +
             `❌ Не получили: ${failed}\n` +
@@ -800,6 +810,7 @@ bot.on('message', async (msg) => {
     // Сбрасываем состояние
     delete adminBroadcastState[adminChatId];
 });
+
 // Админские команды
 // ===== Добавление TRUST SPECIAL аккаунтов =====
 bot.onText(/\/kz$/, async (msg) => {
@@ -862,7 +873,6 @@ bot.on('document', async (msg) => {
         bot.sendMessage(msg.chat.id, "❌ Ошибка при чтении файла");
     }
 });
-
 
 // Статус пула TRUST SPECIAL
 bot.onText(/\/trust_status/, async (msg) => {
