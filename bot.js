@@ -8,6 +8,7 @@ import { connect, users, trustSpecials } from './db.js';
 
 // Добавьте в начало файла (после импортов):
 const adminBroadcastState = {};
+const userStates = {};
 
 // Проверка подключения при старте
 connect().then(() => {
@@ -174,10 +175,10 @@ async function sendTrustSpecialMenu(chatId) {
 // Меню выбора количества TRUST SPECIAL
 async function sendTrustSpecialQuantityMenu(chatId) {
     const availableCount = await (await trustSpecials()).countDocuments();
-    const maxAvailable = Math.min(availableCount, 10);
+    const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxAvailable; i++) {
+    for (let i = 1; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `trust_special_quantity_${i}` });
     }
 
@@ -185,10 +186,12 @@ async function sendTrustSpecialQuantityMenu(chatId) {
     for (let i = 0; i < quantityButtons.length; i += 5) {
         rows.push(quantityButtons.slice(i, i + 5));
     }
+
+    rows.push([{ text: '✍️ Ввести свое количество', callback_data: 'trust_special_custom_quantity' }]);
     rows.push([{ text: '🔙 Назад', callback_data: 'trust_special_category' }]);
 
     const text = `📦 <b>Выберите количество USA (G) 0-24Ч аккаунтов, которое хотите приобрести</b>\n\n` +
-        `Доступно: <b>${maxAvailable}</b> аккаунтов\n` +
+        `Доступно: <b>${availableCount}</b> аккаунтов\n` +
         `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
     const options = {
@@ -520,6 +523,15 @@ bot.on('callback_query', async (callbackQuery) => {
             return bot.answerCallbackQuery(callbackQuery.id);
         }
 
+        // Кастомное количество
+        if (data === 'trust_special_custom_quantity') {
+            await bot.answerCallbackQuery(callbackQuery.id);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество аккаунтов (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: true };
+            return;
+        }
+
         // Назад к выбору количества TRUST SPECIAL
         if (data === 'back_to_trust_special_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
@@ -624,8 +636,36 @@ bot.onText(/\/broadcast/, async (msg) => {
     };
 });
 
-// Обработчик входящих сообщений для рассылки
+// Обработчик входящих сообщений для рассылки и кастомного количества
 bot.on('message', async (msg) => {
+    const chatId = msg.chat.id;
+
+    // Обработка кастомного количества
+    if (userStates[chatId]?.waitingForCustomQuantity && msg.text) {
+        const inputQuantity = parseInt(msg.text.trim());
+        if (isNaN(inputQuantity) || inputQuantity <= 0) {
+            await bot.sendMessage(chatId, '❌ Пожалуйста, введите положительное целое число.');
+            return;
+        }
+
+        const availableCount = await (await trustSpecials()).countDocuments();
+        if (inputQuantity > availableCount) {
+            await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
+            return;
+        }
+
+        const invoiceUrl = await createTrustSpecialInvoice(chatId, inputQuantity);
+        if (!invoiceUrl) {
+            await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
+            delete userStates[chatId];
+            return;
+        }
+
+        await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, inputQuantity);
+        delete userStates[chatId];
+        return;
+    }
+
     if (!msg.from || !adminBroadcastState[msg.chat.id] || !adminBroadcastState[msg.chat.id].waitingForContent) {
         return;
     }
