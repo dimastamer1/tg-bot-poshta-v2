@@ -4,7 +4,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import express from 'express';
 import config from './config.js';
-import { connect, users, trustSpecials } from './db.js';
+import { connect, users, trustSpecials, amMails } from './db.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -47,6 +47,7 @@ function isAdmin(userId) {
 // Главное меню с инлайн-кнопками
 async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
+    const amMailsCount = await (await amMails()).countDocuments();
 
     const usersCollection = await users();
     await usersCollection.updateOne(
@@ -58,7 +59,8 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
                 first_name: msg?.from?.first_name || '',
                 last_name: msg?.from?.last_name || '',
                 first_seen: new Date(),
-                trust_specials: []
+                trust_specials: [],
+                am_mails: []
             }
         },
         { upsert: true }
@@ -66,7 +68,7 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
 
     const welcomeText = `👋 <b>Добро пожаловать, вы находитесь в боте, сделанном под UBT для спама TikTok!</b>\n\n` +
         `<b>Тут вы можете:</b>\n` +
-        `• Купить USA (F) 0-24Ч аккаунты\n` +
+        `• Купить USA MIX 5-24H или AM (G) 5-24H аккаунты\n` +
         `⚠️ Бот новый, возможны временные перебои\n\n` +
         `⚠️ ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n` +
         `🎉 <b>ЧАСТО СКИДКИ, БОНУСЫ</b> часто связки, инфо поводы😱`;
@@ -112,6 +114,7 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
 // Меню категорий
 async function sendCategoriesMenu(chatId, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
+    const amMailsCount = await (await amMails()).countDocuments();
 
     const text = `📂 <b>КАТЕГОРИИ</b>\n\n` +
         `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n` +
@@ -125,7 +128,8 @@ async function sendCategoriesMenu(chatId, messageId = null) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: `⭐️ USA (G) 0-24Ч ⭐️ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
+                [{ text: `⭐️ USA MIX 5-24H ⭐️ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
+                [{ text: `⭐️ AM (G) 5-24H ⭐️ (${amMailsCount}шт)`, callback_data: 'am_mails_category' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
             ]
         }
@@ -149,13 +153,13 @@ async function sendCategoriesMenu(chatId, messageId = null) {
     return bot.sendMessage(chatId, text, options);
 }
 
-// Меню TRUST SPECIAL
+// Меню TRUST SPECIAL (USA MIX 5-24H)
 async function sendTrustSpecialMenu(chatId) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
 
-    const text = `🔥 <b>USA (G) 0-24Ч(${trustSpecialCount}шт)</b>\n\n` +
+    const text = `🔥 <b>USA MIX 5-24H (${trustSpecialCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
-        `✅ • Купить USA (G) 0-24Ч аккаунты\n\n` +
+        `✅ • Купить USA MIX 5-24H аккаунты\n\n` +
         `Цена: <b>10 рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
         `Выберите действие:`;
 
@@ -163,7 +167,30 @@ async function sendTrustSpecialMenu(chatId) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: '💰 КУПИТЬ USA (G) 0-24Ч 💰', callback_data: 'buy_trust_special' }],
+                [{ text: '💰 КУПИТЬ USA MIX 5-24H 💰', callback_data: 'buy_trust_special' }],
+                [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
+            ]
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
+// Меню AM (G) 5-24H
+async function sendAmMailsMenu(chatId) {
+    const amMailsCount = await (await amMails()).countDocuments();
+
+    const text = `🔥 <b>AM (G) 5-24H (${amMailsCount}шт)</b>\n\n` +
+        `<b>В данном меню вы можете:</b>\n` +
+        `✅ • Купить AM (G) 5-24H аккаунты\n\n` +
+        `Цена: <b>10 рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
+        `Выберите действие:`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💰 КУПИТЬ AM (G) 5-24H 💰', callback_data: 'buy_am_mails' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
             ]
         }
@@ -190,7 +217,39 @@ async function sendTrustSpecialQuantityMenu(chatId) {
     rows.push([{ text: '✍️ Ввести свое количество', callback_data: 'trust_special_custom_quantity' }]);
     rows.push([{ text: '🔙 Назад', callback_data: 'trust_special_category' }]);
 
-    const text = `📦 <b>Выберите количество USA (G) 0-24Ч аккаунтов, которое хотите приобрести</b>\n\n` +
+    const text = `📦 <b>Выберите количество USA MIX 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
+        `Доступно: <b>${availableCount}</b> аккаунтов\n` +
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: rows
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
+// Меню выбора количества AM (G) 5-24H
+async function sendAmMailsQuantityMenu(chatId) {
+    const availableCount = await (await amMails()).countDocuments();
+    const maxButton = Math.min(availableCount, 10);
+
+    const quantityButtons = [];
+    for (let i = 1; i <= maxButton; i++) {
+        quantityButtons.push({ text: `${i}`, callback_data: `am_mails_quantity_${i}` });
+    }
+
+    const rows = [];
+    for (let i = 0; i < quantityButtons.length; i += 5) {
+        rows.push(quantityButtons.slice(i, i + 5));
+    }
+
+    rows.push([{ text: '✍️ Ввести свое количество', callback_data: 'am_mails_custom_quantity' }]);
+    rows.push([{ text: '🔙 Назад', callback_data: 'am_mails_category' }]);
+
+    const text = `📦 <b>Выберите количество AM (G) 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
         `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
@@ -208,7 +267,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
     const totalAmount = (0.12 * quantity).toFixed(2);
 
-    const text = `💳 <b>Оплата ${quantity} TRUST SPECIAL аккаунтов</b>\n\n` +
+    const text = `💳 <b>Оплата ${quantity} USA MIX 5-24H аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
         `Нажмите кнопку для оплаты:`;
 
@@ -225,6 +284,27 @@ async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
     return bot.sendMessage(chatId, text, options);
 }
 
+// Меню оплаты AM (G) 5-24H
+async function sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity) {
+    const totalAmount = (0.12 * quantity).toFixed(2);
+
+    const text = `💳 <b>Оплата ${quantity} AM (G) 5-24H аккаунтов</b>\n\n` +
+        `Сумма: <b>${totalAmount} USDT</b>\n\n` +
+        `Нажмите кнопку для оплаты:`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '✅ ОПЛАТИТЬ ЧЕРЕЗ CRYPTOBOT', url: invoiceUrl }],
+                [{ text: '🔙 Назад', callback_data: 'back_to_am_mails_quantity_menu' }]
+            ]
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
 // Создание инвойса для TRUST SPECIAL
 async function createTrustSpecialInvoice(userId, quantity) {
     try {
@@ -234,7 +314,7 @@ async function createTrustSpecialInvoice(userId, quantity) {
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
             amount: amount,
-            description: `Покупка ${quantity} TRUST SPECIAL аккаунтов`,
+            description: `Покупка ${quantity} USA MIX 5-24H аккаунтов`,
             hidden_message: 'Спасибо за покупку!',
             paid_btn_name: 'openBot',
             paid_btn_url: 'https://t.me/ubtshope_bot',
@@ -250,7 +330,7 @@ async function createTrustSpecialInvoice(userId, quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             {
-                $setOnInsert: { user_id: userId, trust_specials: [] },
+                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [] },
                 $set: {
                     [`trust_special_transactions.${transactionId}`]: {
                         invoiceId: response.data.result.invoice_id,
@@ -265,7 +345,52 @@ async function createTrustSpecialInvoice(userId, quantity) {
 
         return response.data.result.pay_url;
     } catch (err) {
-        console.error('Ошибка при создании инвойса TRUST SPECIAL:', err.response?.data || err.message);
+        console.error('Ошибка при создании инвойса USA MIX 5-24H:', err.response?.data || err.message);
+        return null;
+    }
+}
+
+// Создание инвойса для AM (G) 5-24H
+async function createAmMailsInvoice(userId, quantity) {
+    try {
+        const transactionId = `buy_am_mails_${userId}_${Date.now()}`;
+        const amount = 0.12 * quantity;
+
+        const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
+            asset: 'USDT',
+            amount: amount,
+            description: `Покупка ${quantity} AM (G) 5-24H аккаунтов`,
+            hidden_message: 'Спасибо за покупку!',
+            paid_btn_name: 'openBot',
+            paid_btn_url: 'https://t.me/ubtshope_bot',
+            payload: transactionId
+        }, {
+            headers: {
+                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const usersCollection = await users();
+        await usersCollection.updateOne(
+            { user_id: userId },
+            {
+                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [] },
+                $set: {
+                    [`am_mails_transactions.${transactionId}`]: {
+                        invoiceId: response.data.result.invoice_id,
+                        quantity: quantity,
+                        status: 'pending',
+                        timestamp: Date.now()
+                    }
+                }
+            },
+            { upsert: true }
+        );
+
+        return response.data.result.pay_url;
+    } catch (err) {
+        console.error('Ошибка при создании инвойса AM (G) 5-24H:', err.response?.data || err.message);
         return null;
     }
 }
@@ -281,7 +406,23 @@ async function checkTrustSpecialPayment(invoiceId) {
 
         return response.data.result.items[0];
     } catch (err) {
-        console.error('Ошибка при проверке оплаты TRUST SPECIAL:', err);
+        console.error('Ошибка при проверке оплаты USA MIX 5-24H:', err);
+        return null;
+    }
+}
+
+// Проверка оплаты AM (G) 5-24H
+async function checkAmMailsPayment(invoiceId) {
+    try {
+        const response = await axios.get(`https://pay.crypt.bot/api/getInvoices?invoice_ids=${invoiceId}`, {
+            headers: {
+                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN
+            }
+        });
+
+        return response.data.result.items[0];
+    } catch (err) {
+        console.error('Ошибка при проверке оплаты AM (G) 5-24H:', err);
         return null;
     }
 }
@@ -334,7 +475,7 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
-        `🎉 <b>Спасибо за покупку ${quantity} TRUST SPECIAL аккаунтов!</b>\n\n` +
+        `🎉 <b>Спасибо за покупку ${quantity} USA MIX 5-24H аккаунтов!</b>\n\n` +
         `Ваши аккаунты:`,
         { parse_mode: 'HTML' });
 
@@ -346,7 +487,83 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
 
         // Отправляем файл
         await bot.sendDocument(userId, filePath, {
-            caption: `📄 Ваши ${quantity} TRUST SPECIAL аккаунтов в файле`,
+            caption: `📄 Ваши ${quantity} USA MIX 5-24H аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
+    }
+
+    return true;
+}
+
+// Обработка успешной оплаты AM (G) 5-24H
+async function handleSuccessfulAmMailsPayment(userId, transactionId) {
+    const usersCollection = await users();
+    const amMailsCollection = await amMails();
+
+    const user = await usersCollection.findOne({ user_id: userId });
+    if (!user || !user.am_mails_transactions || !user.am_mails_transactions[transactionId]) {
+        return false;
+    }
+
+    const quantity = user.am_mails_transactions[transactionId].quantity;
+
+    // Получаем аккаунты для продажи
+    const accountsToSell = await amMailsCollection.aggregate([
+        { $sample: { size: quantity } }
+    ]).toArray();
+
+    if (accountsToSell.length < quantity) {
+        await usersCollection.updateOne(
+            { user_id: userId },
+            { $set: { [`am_mails_transactions.${transactionId}.status`]: 'failed' } }
+        );
+
+        await bot.sendMessage(userId,
+            `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
+            { parse_mode: 'HTML' });
+        return false;
+    }
+
+    // Обновляем данные пользователя
+    await usersCollection.updateOne(
+        { user_id: userId },
+        {
+            $push: { am_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $set: {
+                [`am_mails_transactions.${transactionId}.status`]: 'completed',
+                [`am_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
+            }
+        }
+    );
+
+    // Удаляем проданные аккаунты
+    await amMailsCollection.deleteMany({
+        _id: { $in: accountsToSell.map(a => a._id) }
+    });
+
+    // Отправляем аккаунты пользователю
+    await bot.sendMessage(userId,
+        `🎉 <b>Спасибо за покупку ${quantity} AM (G) 5-24H аккаунтов!</b>\n\n` +
+        `Ваши аккаунты:`,
+        { parse_mode: 'HTML' });
+
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `am_mails_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} AM (G) 5-24H аккаунтов в файле`,
             parse_mode: 'HTML'
         });
 
@@ -368,8 +585,9 @@ async function sendMyPurchasesMenu(chatId) {
     const user = await usersCollection.findOne({ user_id: chatId });
 
     const hasTrustSpecial = user && user.trust_specials && user.trust_specials.length > 0;
+    const hasAmMails = user && user.am_mails && user.am_mails.length > 0;
 
-    if (!hasTrustSpecial) {
+    if (!hasTrustSpecial && !hasAmMails) {
         return bot.sendMessage(chatId,
             '❌ У вас пока нет покупок.\n' +
             'Нажмите "КАТЕГОРИИ" чтобы сделать покупку', {
@@ -382,13 +600,19 @@ async function sendMyPurchasesMenu(chatId) {
             });
     }
 
+    const buttons = [];
+    if (hasTrustSpecial) {
+        buttons.push([{ text: '🔥 Мои USA MIX 5-24H 🔥', callback_data: 'my_trust_specials' }]);
+    }
+    if (hasAmMails) {
+        buttons.push([{ text: '🔥 Мои AM (G) 5-24H 🔥', callback_data: 'my_am_mails' }]);
+    }
+    buttons.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
     return bot.sendMessage(chatId, '📦 <b>Ваши покупки:</b> 📦', {
         parse_mode: 'HTML',
         reply_markup: {
-            inline_keyboard: [
-                [{ text: '🔥 Мои TRUST SPECIAL 🔥', callback_data: 'my_trust_specials' }],
-                [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-            ]
+            inline_keyboard: buttons
         }
     });
 }
@@ -400,8 +624,8 @@ async function sendMyTrustSpecialsMenu(chatId) {
 
     if (!user || !user.trust_specials || user.trust_specials.length === 0) {
         return bot.sendMessage(chatId,
-            '❌ У вас пока нет TRUST SPECIAL аккаунтов.\n' +
-            'Купите их в разделе TRUST SPECIAL!', {
+            '❌ У вас пока нет USA MIX 5-24H аккаунтов.\n' +
+            'Купите их в разделе USA MIX 5-24H!', {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
@@ -412,9 +636,38 @@ async function sendMyTrustSpecialsMenu(chatId) {
     }
 
     const buttons = user.trust_specials.map(account => [{ text: account.split('|')[0], callback_data: `trust_special_show_${account}` }]);
-    buttons.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
 
-    return bot.sendMessage(chatId, '🔥 <b>Ваши TRUST SPECIAL аккаунты:</b> 🔥', {
+    return bot.sendMessage(chatId, '🔥 <b>Ваши USA MIX 5-24H аккаунты:</b> 🔥', {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: buttons
+        }
+    });
+}
+
+// Мои AM (G) 5-24H аккаунты
+async function sendMyAmMailsMenu(chatId) {
+    const usersCollection = await users();
+    const user = await usersCollection.findOne({ user_id: chatId });
+
+    if (!user || !user.am_mails || user.am_mails.length === 0) {
+        return bot.sendMessage(chatId,
+            '❌ У вас пока нет AM (G) 5-24H аккаунтов.\n' +
+            'Купите их в разделе AM (G) 5-24H!', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
+                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
+                    ]
+                }
+            });
+    }
+
+    const buttons = user.am_mails.map(account => [{ text: account.split('|')[0], callback_data: `am_mails_show_${account}` }]);
+    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
+
+    return bot.sendMessage(chatId, '🔥 <b>Ваши AM (G) 5-24H аккаунты:</b> 🔥', {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: buttons
@@ -459,6 +712,28 @@ setInterval(async () => {
                         await usersCollection.updateOne(
                             { user_id: user.user_id },
                             { $set: { [`trust_special_transactions.${transactionId}.status`]: 'expired' } }
+                        );
+                    }
+                }
+            }
+        }
+
+        // AM (G) 5-24H
+        const usersWithAmMails = await usersCollection.find({
+            "am_mails_transactions": { $exists: true }
+        }).toArray();
+
+        for (const user of usersWithAmMails) {
+            for (const [transactionId, transaction] of Object.entries(user.am_mails_transactions)) {
+                if (transaction.status === 'pending' && transaction.invoiceId) {
+                    const invoice = await checkAmMailsPayment(transaction.invoiceId);
+
+                    if (invoice?.status === 'paid') {
+                        await handleSuccessfulAmMailsPayment(user.user_id, transactionId);
+                    } else if (invoice?.status === 'expired') {
+                        await usersCollection.updateOne(
+                            { user_id: user.user_id },
+                            { $set: { [`am_mails_transactions.${transactionId}.status`]: 'expired' } }
                         );
                     }
                 }
@@ -510,17 +785,36 @@ bot.on('callback_query', async (callbackQuery) => {
             return sendTrustSpecialMenu(chatId);
         }
 
+        // Категория AM (G) 5-24H
+        if (data === 'am_mails_category') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendAmMailsMenu(chatId);
+        }
+
         // Купить TRUST SPECIAL
         if (data === 'buy_trust_special') {
             const trustSpecialCount = await (await trustSpecials()).countDocuments();
             if (trustSpecialCount === 0) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'TRUST SPECIAL аккаунты временно закончились. Попробуйте позже.',
+                    text: 'USA MIX 5-24H аккаунты временно закончились. Попробуйте позже.',
                     show_alert: true
                 });
             }
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendTrustSpecialQuantityMenu(chatId);
+        }
+
+        // Купить AM (G) 5-24H
+        if (data === 'buy_am_mails') {
+            const amMailsCount = await (await amMails()).countDocuments();
+            if (amMailsCount === 0) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'AM (G) 5-24H аккаунты временно закончились. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendAmMailsQuantityMenu(chatId);
         }
 
         // Выбор количества TRUST SPECIAL
@@ -540,12 +834,38 @@ bot.on('callback_query', async (callbackQuery) => {
             return bot.answerCallbackQuery(callbackQuery.id);
         }
 
-        // Кастомное количество
+        // Выбор количества AM (G) 5-24H
+        if (data.startsWith('am_mails_quantity_')) {
+            const quantity = parseInt(data.split('_')[3]);
+            const invoiceUrl = await createAmMailsInvoice(chatId, quantity);
+
+            if (!invoiceUrl) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            await sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity);
+            return bot.answerCallbackQuery(callbackQuery.id);
+        }
+
+        // Кастомное количество TRUST SPECIAL
         if (data === 'trust_special_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество аккаунтов (целое число):');
-            userStates[chatId] = { waitingForCustomQuantity: true };
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: 'trust_special' };
+            return;
+        }
+
+        // Кастомное количество AM (G) 5-24H
+        if (data === 'am_mails_custom_quantity') {
+            await bot.answerCallbackQuery(callbackQuery.id);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество AM (G) 5-24H аккаунтов (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
             return;
         }
 
@@ -553,6 +873,12 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'back_to_trust_special_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendTrustSpecialQuantityMenu(chatId);
+        }
+
+        // Назад к выбору количества AM (G) 5-24H
+        if (data === 'back_to_am_mails_quantity_menu') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendAmMailsQuantityMenu(chatId);
         }
 
         // Мои покупки
@@ -567,17 +893,41 @@ bot.on('callback_query', async (callbackQuery) => {
             return sendMyTrustSpecialsMenu(chatId);
         }
 
+        // Мои AM (G) 5-24H
+        if (data === 'my_am_mails') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyAmMailsMenu(chatId);
+        }
+
         // Показываем выбранный TRUST SPECIAL аккаунт
         if (data.startsWith('trust_special_show_')) {
             const account = data.replace('trust_special_show_', '');
             await bot.sendMessage(chatId,
-                `🔥 <b>Ваш TRUST SPECIAL аккаунт:</b>\n<code>${account}</code>\n\n` +
+                `🔥 <b>Ваш USA MIX 5-24H аккаунт:</b>\n<code>${account}</code>\n\n` +
                 `Используйте для ваших целей!`,
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [
                             [{ text: '🔙 Назад', callback_data: 'my_trust_specials' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        // Показываем выбранный AM (G) 5-24H аккаунт
+        if (data.startsWith('am_mails_show_')) {
+            const account = data.replace('am_mails_show_', '');
+            await bot.sendMessage(chatId,
+                `🔥 <b>Ваш AM (G) 5-24H аккаунт:</b>\n<code>${account}</code>\n\n` +
+                `Используйте для ваших целей!`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔙 Назад', callback_data: 'my_am_mails' }]
                         ]
                     }
                 }
@@ -616,7 +966,8 @@ bot.onText(/\/start/, async (msg) => {
                 last_name: msg.from.last_name || '',
                 first_seen: new Date(),
                 last_seen: new Date(),
-                trust_specials: []
+                trust_specials: [],
+                am_mails: []
             }
         },
         { upsert: true }
@@ -664,20 +1015,38 @@ bot.on('message', async (msg) => {
             return;
         }
 
-        const availableCount = await (await trustSpecials()).countDocuments();
-        if (inputQuantity > availableCount) {
-            await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
-            return;
+        if (userStates[chatId].waitingForCustomQuantity === 'trust_special') {
+            const availableCount = await (await trustSpecials()).countDocuments();
+            if (inputQuantity > availableCount) {
+                await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
+                return;
+            }
+
+            const invoiceUrl = await createTrustSpecialInvoice(chatId, inputQuantity);
+            if (!invoiceUrl) {
+                await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
+                delete userStates[chatId];
+                return;
+            }
+
+            await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, inputQuantity);
+        } else if (userStates[chatId].waitingForCustomQuantity === 'am_mails') {
+            const availableCount = await (await amMails()).countDocuments();
+            if (inputQuantity > availableCount) {
+                await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
+                return;
+            }
+
+            const invoiceUrl = await createAmMailsInvoice(chatId, inputQuantity);
+            if (!invoiceUrl) {
+                await bot.sendMessage(chatId, '❌ Ошибка при создания инвойса. Попробуйте позже.');
+                delete userStates[chatId];
+                return;
+            }
+
+            await sendAmMailsPaymentMenu(chatId, invoiceUrl, inputQuantity);
         }
 
-        const invoiceUrl = await createTrustSpecialInvoice(chatId, inputQuantity);
-        if (!invoiceUrl) {
-            await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
-            delete userStates[chatId];
-            return;
-        }
-
-        await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, inputQuantity);
         delete userStates[chatId];
         return;
     }
@@ -816,10 +1185,10 @@ bot.on('message', async (msg) => {
 bot.onText(/\/kz$/, async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
-    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с аккаунтами в формате:\nemail|phone|username|key|country");
+    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с USA MIX 5-24H аккаунтами в формате:\nemail|phone|username|key|country");
 });
 
-// Если команда с аргументами (через текст)
+// Если команда с аргументами (через текст) для TRUST SPECIAL
 bot.onText(/\/kz (.+)/, async (msg, match) => {
     if (!isAdmin(msg.from.id)) return;
 
@@ -832,10 +1201,33 @@ bot.onText(/\/kz (.+)/, async (msg, match) => {
     const count = await trustSpecialsCollection.countDocuments();
 
     bot.sendMessage(msg.chat.id,
-        `✅ Добавлено: ${result.insertedCount}\n🔥 Всего TRUST SPECIAL: ${count}`);
+        `✅ Добавлено: ${result.insertedCount}\n🔥 Всего USA MIX 5-24H: ${count}`);
 });
 
-// Если кидают файл .txt после команды /kz
+// ===== Добавление AM (G) 5-24H аккаунтов =====
+bot.onText(/\/am$/, async (msg) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с AM (G) 5-24H аккаунтами в формате:\nemail|phone|username|key|country");
+});
+
+// Если команда с аргументами (через текст) для AM (G) 5-24H
+bot.onText(/\/am (.+)/, async (msg, match) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    const amMailsCollection = await amMails();
+    const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
+
+    const toInsert = newAccounts.map(str => ({ raw: str }));
+
+    const result = await amMailsCollection.insertMany(toInsert, { ordered: false });
+    const count = await amMailsCollection.countDocuments();
+
+    bot.sendMessage(msg.chat.id,
+        `✅ Добавлено: ${result.insertedCount}\n🔥 Всего AM (G) 5-24H: ${count}`);
+});
+
+// Если кидают файл .txt после команды /kz или /am
 bot.on('document', async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
@@ -860,32 +1252,62 @@ bot.on('document', async (msg) => {
             return bot.sendMessage(msg.chat.id, "❌ Файл пустой!");
         }
 
-        const trustSpecialsCollection = await trustSpecials();
-        const toInsert = lines.map(str => ({ raw: str }));
+        // Проверяем, ожидает ли бот загрузки для /kz или /am
+        if (adminBroadcastState[msg.chat.id]?.waitingForContent) {
+            return; // Игнорируем, если ждем контент для рассылки
+        }
 
-        const result = await trustSpecialsCollection.insertMany(toInsert, { ordered: false });
-        const count = await trustSpecialsCollection.countDocuments();
+        // Предполагаем, что файл для последней команды (/kz или /am)
+        const lastCommand = adminBroadcastState[msg.chat.id]?.lastCommand || 'kz'; // По умолчанию /kz
+        let collection, categoryName;
+
+        if (lastCommand === 'am') {
+            collection = await amMails();
+            categoryName = 'AM (G) 5-24H';
+        } else {
+            collection = await trustSpecials();
+            categoryName = 'USA MIX 5-24H';
+        }
+
+        const toInsert = lines.map(str => ({ raw: str }));
+        const result = await collection.insertMany(toInsert, { ordered: false });
+        const count = await collection.countDocuments();
 
         bot.sendMessage(msg.chat.id,
-            `✅ Из файла добавлено: ${result.insertedCount}\n🔥 Всего TRUST SPECIAL: ${count}`);
+            `✅ Из файла добавлено: ${result.insertedCount}\n🔥 Всего ${categoryName}: ${count}`);
     } catch (err) {
         console.error("Ошибка при обработке файла:", err);
         bot.sendMessage(msg.chat.id, "❌ Ошибка при чтении файла");
     }
 });
 
-// Статус пула TRUST SPECIAL
+// Сохраняем последнюю использованную команду для обработки документов
+bot.onText(/\/(kz|am)$/, async (msg, match) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    const command = match[1];
+    adminBroadcastState[msg.chat.id] = { lastCommand: command };
+    bot.sendMessage(msg.chat.id, `📂 Отправь .txt файл с ${command === 'kz' ? 'USA MIX 5-24H' : 'AM (G) 5-24H'} аккаунтами в формате:\nemail|phone|username|key|country`);
+});
+
+// Статус пула TRUST SPECIAL и AM (G) 5-24H
 bot.onText(/\/trust_status/, async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
     const trustSpecialsCollection = await trustSpecials();
-    const count = await trustSpecialsCollection.countDocuments();
-    const first50 = await trustSpecialsCollection.find().limit(50).toArray();
+    const amMailsCollection = await amMails();
+    const trustSpecialCount = await trustSpecialsCollection.countDocuments();
+    const amMailsCount = await amMailsCollection.countDocuments();
+    const trustSpecialFirst50 = await trustSpecialsCollection.find().limit(50).toArray();
+    const amMailsFirst50 = await amMailsCollection.find().limit(50).toArray();
 
-    let message = `🔥 Всего TRUST SPECIAL: ${count}\n\n`;
-    message += first50.map(e => e.raw).join('\n');
+    let message = `🔥 Всего USA MIX 5-24H: ${trustSpecialCount}\n\n`;
+    message += trustSpecialFirst50.map(e => e.raw).join('\n');
+    if (trustSpecialCount > 50) message += '\n\n...и другие (показаны первые 50)';
 
-    if (count > 200) message += '\n\n...и другие (показаны первые 200)';
+    message += `\n\n🔥 Всего AM (G) 5-24H: ${amMailsCount}\n\n`;
+    message += amMailsFirst50.map(e => e.raw).join('\n');
+    if (amMailsCount > 50) message += '\n\n...и другие (показаны первые 50)';
 
     bot.sendMessage(msg.chat.id, message);
 });
@@ -898,12 +1320,14 @@ bot.onText(/\/db_status/, async (msg) => {
         const db = await connect();
         const stats = await db.command({ dbStats: 1 });
         const trustSpecialCount = await (await trustSpecials()).countDocuments();
+        const amMailsCount = await (await amMails()).countDocuments();
 
         bot.sendMessage(msg.chat.id,
             `🛠️ <b>Статус базы данных</b>\n\n` +
             `✅ Подключение активно\n` +
             `📊 Размер базы: ${(stats.dataSize / 1024).toFixed(2)} KB\n` +
-            `🔥 TRUST SPECIAL в пуле: ${trustSpecialCount}\n` +
+            `🔥 USA MIX 5-24H в пуле: ${trustSpecialCount}\n` +
+            `🔥 AM (G) 5-24H в пуле: ${amMailsCount}\n` +
             `👥 Пользователей: ${await (await users()).countDocuments()}`,
             { parse_mode: 'HTML' });
     } catch (e) {
