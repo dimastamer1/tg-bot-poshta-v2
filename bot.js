@@ -44,6 +44,17 @@ function isAdmin(userId) {
     return userId === config.adminId;
 }
 
+// Проверка, является ли пользователь участником группы
+async function isGroupMember(userId) {
+    try {
+        const chatMember = await bot.getChatMember(config.groupId, userId);
+        return ['member', 'administrator', 'creator'].includes(chatMember.status);
+    } catch (err) {
+        console.error(`Ошибка при проверке членства в группе для userId ${userId}:`, err);
+        return false;
+    }
+}
+
 // Главное меню с инлайн-кнопками
 async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
@@ -751,11 +762,56 @@ bot.on('callback_query', async (callbackQuery) => {
     const messageId = callbackQuery.message.message_id;
 
     try {
+        if (userStates[chatId]?.waitingForGroupMembership && data !== 'check_group_membership') {
+            await bot.answerCallbackQuery(callbackQuery.id, {
+                text: '❌ Сначала вступите в группу и пройдите проверку.',
+                show_alert: true
+            });
+            return;
+        }
+
         const usersCollection = await users();
         await usersCollection.updateOne(
             { user_id: chatId },
             { $set: { last_seen: new Date() } }
         );
+
+        // Проверка членства в группе
+        if (data === 'check_group_membership') {
+            const isMember = await isGroupMember(chatId);
+            if (isMember) {
+                // Пользователь в группе — сохраняем в базу и показываем главное меню
+                const usersCollection = await users();
+                await usersCollection.updateOne(
+                    { user_id: chatId },
+                    {
+                        $setOnInsert: {
+                            user_id: chatId,
+                            username: callbackQuery.from.username || '',
+                            first_name: callbackQuery.from.first_name || '',
+                            last_name: callbackQuery.from.last_name || '',
+                            first_seen: new Date(),
+                            last_seen: new Date(),
+                            trust_specials: [],
+                            am_mails: []
+                        }
+                    },
+                    { upsert: true }
+                );
+
+                await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+                delete userStates[chatId];
+                await sendMainMenu(chatId);
+                return bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Вы успешно прошли проверку!' });
+            } else {
+                // Пользователь еще не в группе
+                await bot.answerCallbackQuery(callbackQuery.id, {
+                    text: '❌ Вы еще не вступили в группу. Подайте заявку и попробуйте снова.',
+                    show_alert: true
+                });
+            }
+            return;
+        }
 
         if (data === 'back_to_main') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
@@ -953,27 +1009,64 @@ bot.on('callback_query', async (callbackQuery) => {
 // Команда /start
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
+    const userId = msg.from.id;
 
-    // Сохраняем в базу
+    // Проверяем, есть ли пользователь в базе
     const usersCollection = await users();
-    await usersCollection.updateOne(
-        { user_id: chatId },
-        {
-            $setOnInsert: {
-                user_id: chatId,
-                username: msg.from.username || '',
-                first_name: msg.from.first_name || '',
-                last_name: msg.from.last_name || '',
-                first_seen: new Date(),
-                last_seen: new Date(),
-                trust_specials: [],
-                am_mails: []
-            }
-        },
-        { upsert: true }
-    );
+    const user = await usersCollection.findOne({ user_id: chatId });
 
-    await sendMainMenu(chatId, false, msg);
+    if (!user) {
+        // Новый пользователь — показываем капчу
+        const isMember = await isGroupMember(userId);
+        if (!isMember) {
+            // Пользователь не в группе — отправляем сообщение с капчей
+            await bot.sendMessage(chatId,
+                `👋 <b>Добро пожаловать!</b>\n\n` +
+                `Чтобы начать пользоваться ботом, подайте заявку на вступление в нашу закрытую группу:\n` +
+                `<a href="https://t.me/+vOI83YLQ4VZmYjZi">Вступить в группу</a>\n\n` +
+                `После подачи заявки нажмите кнопку ниже для проверки.`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '✅ Проверить вступление', callback_data: 'check_group_membership' }]
+                        ]
+                    }
+                }
+            );
+
+            // Сохраняем состояние ожидания проверки
+            userStates[chatId] = { waitingForGroupMembership: true };
+            return;
+        } else {
+            // Пользователь уже в группе — сохраняем в базу и показываем главное меню
+            await usersCollection.updateOne(
+                { user_id: chatId },
+                {
+                    $setOnInsert: {
+                        user_id: chatId,
+                        username: msg.from.username || '',
+                        first_name: msg.from.first_name || '',
+                        last_name: msg.from.last_name || '',
+                        first_seen: new Date(),
+                        last_seen: new Date(),
+                        trust_specials: [],
+                        am_mails: []
+                    }
+                },
+                { upsert: true }
+            );
+
+            await sendMainMenu(chatId, false, msg);
+        }
+    } else {
+        // Пользователь уже в базе — показываем главное меню
+        await usersCollection.updateOne(
+            { user_id: chatId },
+            { $set: { last_seen: new Date() } }
+        );
+        await sendMainMenu(chatId, false, msg);
+    }
 });
 
 // Команда рассылки
@@ -1006,6 +1099,22 @@ bot.onText(/\/broadcast/, async (msg) => {
 // Обработчик входящих сообщений для рассылки и кастомного количества
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
+
+    if (userStates[chatId]?.waitingForGroupMembership) {
+        await bot.sendMessage(chatId,
+            `❌ Пожалуйста, сначала вступите в группу: <a href="https://t.me/+vOI83YLQ4VZmYjZi">Вступить в группу</a>\n` +
+            `Затем нажмите "Проверить вступление".`,
+            {
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '✅ Проверить вступление', callback_data: 'check_group_membership' }]
+                    ]
+                }
+            }
+        );
+        return;
+    }
 
     // Обработка кастомного количества
     if (userStates[chatId]?.waitingForCustomQuantity && msg.text) {
