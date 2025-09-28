@@ -66,9 +66,9 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
         { upsert: true }
     );
 
-    const welcomeText = `👋 <b>Добро пожаловать, вы находитесь в боте, сделанном под UBT для спама TikTok!</b>\n\n` +
+    const welcomeText = `👋 <b>Добро пожаловать, вы находитесь в боте, сделанном под UBT для спа)ма TikTok!</b>\n\n` +
         `<b>Тут вы можете:</b>\n` +
-        `• Купить USA MIX 5-24H или AM (G) 5-24H аккаунты\n` +
+        `• Купить аккаунты очень хорошой регы, без теней и банов!\n` +
         `⚠️ Бот новый, возможны временные перебои\n\n` +
         `⚠️ ПОЛУЧАТЬ КОДЫ С ПОЧТ С БОТА ТУТ 📤 — @ubtuniccal_bot\n\n` +
         `🎉 <b>ЧАСТО СКИДКИ, БОНУСЫ</b> часто связки, инфо поводы😱`;
@@ -129,7 +129,7 @@ async function sendCategoriesMenu(chatId, messageId = null) {
         reply_markup: {
             inline_keyboard: [
                 [{ text: `⭐️ USA MIX 5-24H ⭐️ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
-                [{ text: `⭐️ AM (G) 5-24H ⭐️ (${amMailsCount}шт)`, callback_data: 'am_mails_category' }],
+                [{ text: `⭐️ USA++ (MIX) API REG⭐️ (${amMailsCount}шт)`, callback_data: 'am_mails_category' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
             ]
         }
@@ -180,9 +180,9 @@ async function sendTrustSpecialMenu(chatId) {
 async function sendAmMailsMenu(chatId) {
     const amMailsCount = await (await amMails()).countDocuments();
 
-    const text = `🔥 <b>AM (G) 5-24H (${amMailsCount}шт)</b>\n\n` +
+    const text = `🔥 <b>USA++ (MIX) API REG (${amMailsCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
-        `✅ • Купить AM (G) 5-24H аккаунты\n\n` +
+        `✅ • Купить USA++ (MIX) API REG аккаунты\n\n` +
         `Цена: <b>10 рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
         `Выберите действие:`;
 
@@ -190,7 +190,7 @@ async function sendAmMailsMenu(chatId) {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: [
-                [{ text: '💰 КУПИТЬ AM (G) 5-24H 💰', callback_data: 'buy_am_mails' }],
+                [{ text: '💰 КУПИТЬ USA++ (MIX) API REG 💰', callback_data: 'buy_am_mails' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
             ]
         }
@@ -249,7 +249,7 @@ async function sendAmMailsQuantityMenu(chatId) {
     rows.push([{ text: '✍️ Ввести свое количество', callback_data: 'am_mails_custom_quantity' }]);
     rows.push([{ text: '🔙 Назад', callback_data: 'am_mails_category' }]);
 
-    const text = `📦 <b>Выберите количество AM (G) 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
+    const text = `📦 <b>Выберите количество USA++ (MIX) API REG аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
         `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
@@ -288,7 +288,7 @@ async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
 async function sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity) {
     const totalAmount = (0.12 * quantity).toFixed(2);
 
-    const text = `💳 <b>Оплата ${quantity} AM (G) 5-24H аккаунтов</b>\n\n` +
+    const text = `💳 <b>Оплата ${quantity} USA++ (MIX) API REG аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
         `Нажмите кнопку для оплаты:`;
 
@@ -359,7 +359,7 @@ async function createAmMailsInvoice(userId, quantity) {
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
             amount: amount,
-            description: `Покупка ${quantity} AM (G) 5-24H аккаунтов`,
+            description: `Покупка ${quantity} USA++ (MIX) API REG`,
             hidden_message: 'Спасибо за покупку!',
             paid_btn_name: 'openBot',
             paid_btn_url: 'https://t.me/ubtshope_bot',
@@ -390,7 +390,7 @@ async function createAmMailsInvoice(userId, quantity) {
 
         return response.data.result.pay_url;
     } catch (err) {
-        console.error('Ошибка при создании инвойса AM (G) 5-24H:', err.response?.data || err.message);
+        console.error('Ошибка при создании инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
         return null;
     }
 }
@@ -422,7 +422,7 @@ async function checkAmMailsPayment(invoiceId) {
 
         return response.data.result.items[0];
     } catch (err) {
-        console.error('Ошибка при проверке оплаты AM (G) 5-24H:', err);
+        console.error('Ошибка при проверке оплаты USA++ (MIX) API REG', err);
         return null;
     }
 }
@@ -551,7 +551,7 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
-        `🎉 <b>Спасибо за покупку ${quantity} AM (G) 5-24H аккаунтов!</b>\n\n` +
+        `🎉 <b>Спасибо за покупку ${quantity} USA++ (MIX) API REG аккаунтов!</b>\n\n` +
         `Ваши аккаунты:`,
         { parse_mode: 'HTML' });
 
@@ -563,7 +563,7 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
 
         // Отправляем файл
         await bot.sendDocument(userId, filePath, {
-            caption: `📄 Ваши ${quantity} AM (G) 5-24H аккаунтов в файле`,
+            caption: `📄 Ваши ${quantity} USA++ (MIX) API REG аккаунтов в файле`,
             parse_mode: 'HTML'
         });
 
@@ -605,7 +605,7 @@ async function sendMyPurchasesMenu(chatId) {
         buttons.push([{ text: '🔥 Мои USA MIX 5-24H 🔥', callback_data: 'my_trust_specials' }]);
     }
     if (hasAmMails) {
-        buttons.push([{ text: '🔥 Мои AM (G) 5-24H 🔥', callback_data: 'my_am_mails' }]);
+        buttons.push([{ text: '🔥 USA++ (MIX) API REG🔥', callback_data: 'my_am_mails' }]);
     }
     buttons.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
 
@@ -653,8 +653,8 @@ async function sendMyAmMailsMenu(chatId) {
 
     if (!user || !user.am_mails || user.am_mails.length === 0) {
         return bot.sendMessage(chatId,
-            '❌ У вас пока нет AM (G) 5-24H аккаунтов.\n' +
-            'Купите их в разделе AM (G) 5-24H!', {
+            '❌ У вас пока нет USA++ (MIX) API REG аккаунтов.\n' +
+            'Купите их в разделе USA++ (MIX) API REG', {
                 reply_markup: {
                     inline_keyboard: [
                         [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
@@ -667,7 +667,7 @@ async function sendMyAmMailsMenu(chatId) {
     const buttons = user.am_mails.map(account => [{ text: account.split('|')[0], callback_data: `am_mails_show_${account}` }]);
     buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
 
-    return bot.sendMessage(chatId, '🔥 <b>Ваши AM (G) 5-24H аккаунты:</b> 🔥', {
+    return bot.sendMessage(chatId, '🔥 <b>Ваши USA++ (MIX) API REG аккаунты:</b> 🔥', {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: buttons
@@ -843,7 +843,7 @@ bot.on('callback_query', async (callbackQuery) => {
             const amMailsCount = await (await amMails()).countDocuments();
             if (amMailsCount === 0) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'AM (G) 5-24H аккаунты временно закончились. Попробуйте позже.',
+                    text: 'USA++ (MIX) API REG аккаунты временно закончились. Попробуйте позже.',
                     show_alert: true
                 });
             }
@@ -898,7 +898,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'am_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество AM (G) 5-24H аккаунтов (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
             userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
             return;
         }
@@ -955,7 +955,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data.startsWith('am_mails_show_')) {
             const account = data.replace('am_mails_show_', '');
             await bot.sendMessage(chatId,
-                `🔥 <b>Ваш AM (G) 5-24H аккаунт:</b>\n<code>${account}</code>\n\n` +
+                `🔥 <b>Ваш USA++ (MIX) API REG</b>\n<code>${account}</code>\n\n` +
                 `Используйте для ваших целей!`,
                 {
                     parse_mode: 'HTML',
@@ -1269,7 +1269,7 @@ bot.onText(/\/kz (.+)/, async (msg, match) => {
 bot.onText(/\/am$/, async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
-    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с AM (G) 5-24H аккаунтами в формате:\nemail|phone|username|key|country");
+    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с USA++ (MIX) API REG аккаунтами в формате:\nemail|phone|username|key|country");
 });
 
 // Если команда с аргументами (через текст) для AM (G) 5-24H
@@ -1366,7 +1366,7 @@ bot.onText(/\/trust_status/, async (msg) => {
     message += trustSpecialFirst50.map(e => e.raw).join('\n');
     if (trustSpecialCount > 50) message += '\n\n...и другие (показаны первые 50)';
 
-    message += `\n\n🔥 Всего AM (G) 5-24H: ${amMailsCount}\n\n`;
+    message += `\n\n🔥 USA++ (MIX) API REG: ${amMailsCount}\n\n`;
     message += amMailsFirst50.map(e => e.raw).join('\n');
     if (amMailsCount > 50) message += '\n\n...и другие (показаны первые 50)';
 
@@ -1388,7 +1388,7 @@ bot.onText(/\/db_status/, async (msg) => {
             `✅ Подключение активно\n` +
             `📊 Размер базы: ${(stats.dataSize / 1024).toFixed(2)} KB\n` +
             `🔥 USA MIX 5-24H в пуле: ${trustSpecialCount}\n` +
-            `🔥 AM (G) 5-24H в пуле: ${amMailsCount}\n` +
+            `🔥 USA++ (MIX) API REG ${amMailsCount}\n` +
             `👥 Пользователей: ${await (await users()).countDocuments()}`,
             { parse_mode: 'HTML' });
     } catch (e) {
