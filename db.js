@@ -45,6 +45,10 @@ async function amMails() {
   return (await connect()).collection('am_mails');
 }
 
+async function kzMails() {
+  return (await connect()).collection('kz_mails');
+}
+
 async function users() {
   return (await connect()).collection('users');
 }
@@ -78,6 +82,11 @@ async function readUkrMailsPool() {
 async function readAmMailsPool() {
   const list = await (await amMails()).find().toArray();
   return { am_mails: list.map(e => e.raw) };
+}
+
+async function readKzMailsPool() {
+  const list = await (await kzMails()).find().toArray();
+  return { kz_mails: list.map(e => e.raw) };
 }
 
 async function readGmailKeysPool() {
@@ -151,6 +160,24 @@ async function writeAmMailsPool(data) {
   );
 }
 
+async function writeKzMailsPool(data) {
+  const col = await kzMails();
+  await col.deleteMany({});
+  await col.insertMany(
+    data.kz_mails.map(str => {
+      const [email, phone, username, key, country] = str.split('|');
+      return {
+        email: (email || '').trim(),
+        phone: (phone || '').trim(),
+        username: (username || '').trim(),
+        key: (key || '').trim(),
+        country: (country || '').trim(),
+        raw: str.trim()
+      };
+    })
+  );
+}
+
 async function writeGmailKeysPool(data) {
   const col = await gmailKeys();
   await col.deleteMany({});
@@ -191,6 +218,7 @@ export {
   usaMails,
   ukrMails,
   amMails,
+  kzMails,
   users,
   gmailKeys,
   readEmailsPool,
@@ -203,6 +231,8 @@ export {
   writeUkrMailsPool,
   readAmMailsPool,
   writeAmMailsPool,
+  readKzMailsPool,
+  writeKzMailsPool,
   readGmailKeysPool,
   writeGmailKeysPool,
   readDB,

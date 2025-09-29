@@ -4,7 +4,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import express from 'express';
 import config from './config.js';
-import { connect, users, trustSpecials, amMails } from './db.js';
+import { connect, users, trustSpecials, amMails, kzMails } from './db.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -48,6 +48,7 @@ function isAdmin(userId) {
 async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
     const amMailsCount = await (await amMails()).countDocuments();
+    const kzMailsCount = await (await kzMails()).countDocuments();
 
     const usersCollection = await users();
     await usersCollection.updateOne(
@@ -60,7 +61,8 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
                 last_name: msg?.from?.last_name || '',
                 first_seen: new Date(),
                 trust_specials: [],
-                am_mails: []
+                am_mails: [],
+                kz_mails: []
             }
         },
         { upsert: true }
@@ -115,6 +117,7 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
 async function sendCategoriesMenu(chatId, messageId = null) {
     const trustSpecialCount = await (await trustSpecials()).countDocuments();
     const amMailsCount = await (await amMails()).countDocuments();
+    const kzMailsCount = await (await kzMails()).countDocuments();
 
     const text = `📂 <b>КАТЕГОРИИ</b>\n\n` +
         `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n` +
@@ -130,6 +133,7 @@ async function sendCategoriesMenu(chatId, messageId = null) {
             inline_keyboard: [
                 [{ text: `⭐️ USA MIX 5-24H ⭐️ (${trustSpecialCount}шт)`, callback_data: 'trust_special_category' }],
                 [{ text: `⭐️ USA++ (MIX) API REG⭐️ (${amMailsCount}шт)`, callback_data: 'am_mails_category' }],
+                [{ text: `⭐️ KZ MIX API REGA⭐️ (${kzMailsCount}шт)`, callback_data: 'kz_mails_category' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
             ]
         }
@@ -192,6 +196,29 @@ async function sendAmMailsMenu(chatId) {
         reply_markup: {
             inline_keyboard: [
                 [{ text: '💰 КУПИТЬ USA++ (MIX) API REG 💰', callback_data: 'buy_am_mails' }],
+                [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
+            ]
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
+// Меню KZ MIX API REGA
+async function sendKzMailsMenu(chatId) {
+    const kzMailsCount = await (await kzMails()).countDocuments();
+
+    const text = `🔥 <b>KZ MIX API REGA (${kzMailsCount}шт)</b>\n\n` +
+        `<b>В данном меню вы можете:</b>\n` +
+        `✅ • Купить KZ MIX API REGA аккаунты\n\n` +
+        `Цена: <b>10 рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
+        `Выберите действие:`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💰 КУПИТЬ KZ MIX API REGA 💰', callback_data: 'buy_kz_mails' }],
                 [{ text: '🔙 Назад', callback_data: 'back_to_categories' }]
             ]
         }
@@ -264,6 +291,38 @@ async function sendAmMailsQuantityMenu(chatId) {
     return bot.sendMessage(chatId, text, options);
 }
 
+// Меню выбора количества KZ MIX API REGA
+async function sendKzMailsQuantityMenu(chatId) {
+    const availableCount = await (await kzMails()).countDocuments();
+    const maxButton = Math.min(availableCount, 10);
+
+    const quantityButtons = [];
+    for (let i = 1; i <= maxButton; i++) {
+        quantityButtons.push({ text: `${i}`, callback_data: `kz_mails_quantity_${i}` });
+    }
+
+    const rows = [];
+    for (let i = 0; i < quantityButtons.length; i += 5) {
+        rows.push(quantityButtons.slice(i, i + 5));
+    }
+
+    rows.push([{ text: '✍️ Ввести свое количество', callback_data: 'kz_mails_custom_quantity' }]);
+    rows.push([{ text: '🔙 Назад', callback_data: 'kz_mails_category' }]);
+
+    const text = `📦 <b>Выберите количество KZ MIX API REGA аккаунтов, которое хотите приобрести</b>\n\n` +
+        `Доступно: <b>${availableCount}</b> аккаунтов\n` +
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: rows
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
 // Меню оплаты TRUST SPECIAL
 async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
     const totalAmount = (0.12 * quantity).toFixed(2);
@@ -306,6 +365,27 @@ async function sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity) {
     return bot.sendMessage(chatId, text, options);
 }
 
+// Меню оплаты KZ MIX API REGA
+async function sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity) {
+    const totalAmount = (0.12 * quantity).toFixed(2);
+
+    const text = `💳 <b>Оплата ${quantity} KZ MIX API REGA аккаунтов</b>\n\n` +
+        `Сумма: <b>${totalAmount} USDT</b>\n\n` +
+        `Нажмите кнопку для оплаты:`;
+
+    const options = {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '✅ ОПЛАТИТЬ ЧЕРЕЗ CRYPTOBOT', url: invoiceUrl }],
+                [{ text: '🔙 Назад', callback_data: 'back_to_kz_mails_quantity_menu' }]
+            ]
+        }
+    };
+
+    return bot.sendMessage(chatId, text, options);
+}
+
 // Создание инвойса для TRUST SPECIAL
 async function createTrustSpecialInvoice(userId, quantity) {
     try {
@@ -331,7 +411,7 @@ async function createTrustSpecialInvoice(userId, quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             {
-                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [] },
+                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [], kz_mails: [] },
                 $set: {
                     [`trust_special_transactions.${transactionId}`]: {
                         invoiceId: response.data.result.invoice_id,
@@ -376,7 +456,7 @@ async function createAmMailsInvoice(userId, quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             {
-                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [] },
+                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [], kz_mails: [] },
                 $set: {
                     [`am_mails_transactions.${transactionId}`]: {
                         invoiceId: response.data.result.invoice_id,
@@ -392,6 +472,51 @@ async function createAmMailsInvoice(userId, quantity) {
         return response.data.result.pay_url;
     } catch (err) {
         console.error('Ошибка при создании инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
+        return null;
+    }
+}
+
+// Создание инвойса для KZ MIX API REGA
+async function createKzMailsInvoice(userId, quantity) {
+    try {
+        const transactionId = `buy_kz_mails_${userId}_${Date.now()}`;
+        const amount = 0.12 * quantity;
+
+        const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
+            asset: 'USDT',
+            amount: amount,
+            description: `Покупка ${quantity} KZ MIX API REGA аккаунтов`,
+            hidden_message: 'Спасибо за покупку!',
+            paid_btn_name: 'openBot',
+            paid_btn_url: 'https://t.me/ubtshope_bot',
+            payload: transactionId
+        }, {
+            headers: {
+                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const usersCollection = await users();
+        await usersCollection.updateOne(
+            { user_id: userId },
+            {
+                $setOnInsert: { user_id: userId, trust_specials: [], am_mails: [], kz_mails: [] },
+                $set: {
+                    [`kz_mails_transactions.${transactionId}`]: {
+                        invoiceId: response.data.result.invoice_id,
+                        quantity: quantity,
+                        status: 'pending',
+                        timestamp: Date.now()
+                    }
+                }
+            },
+            { upsert: true }
+        );
+
+        return response.data.result.pay_url;
+    } catch (err) {
+        console.error('Ошибка при создании инвойса KZ MIX API REGA:', err.response?.data || err.message);
         return null;
     }
 }
@@ -423,7 +548,23 @@ async function checkAmMailsPayment(invoiceId) {
 
         return response.data.result.items[0];
     } catch (err) {
-        console.error('Ошибка при проверке оплаты USA++ (MIX) API REG', err);
+        console.error('Ошибка при проверке оплаты USA++ (MIX) API REG:', err);
+        return null;
+    }
+}
+
+// Проверка оплаты KZ MIX API REGA
+async function checkKzMailsPayment(invoiceId) {
+    try {
+        const response = await axios.get(`https://pay.crypt.bot/api/getInvoices?invoice_ids=${invoiceId}`, {
+            headers: {
+                'Crypto-Pay-API-Token': CRYPTOBOT_API_TOKEN
+            }
+        });
+
+        return response.data.result.items[0];
+    } catch (err) {
+        console.error('Ошибка при проверке оплаты KZ MIX API REGA:', err);
         return null;
     }
 }
@@ -580,6 +721,82 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
     return true;
 }
 
+// Обработка успешной оплаты KZ MIX API REGA
+async function handleSuccessfulKzMailsPayment(userId, transactionId) {
+    const usersCollection = await users();
+    const kzMailsCollection = await kzMails();
+
+    const user = await usersCollection.findOne({ user_id: userId });
+    if (!user || !user.kz_mails_transactions || !user.kz_mails_transactions[transactionId]) {
+        return false;
+    }
+
+    const quantity = user.kz_mails_transactions[transactionId].quantity;
+
+    // Получаем аккаунты для продажи
+    const accountsToSell = await kzMailsCollection.aggregate([
+        { $sample: { size: quantity } }
+    ]).toArray();
+
+    if (accountsToSell.length < quantity) {
+        await usersCollection.updateOne(
+            { user_id: userId },
+            { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'failed' } }
+        );
+
+        await bot.sendMessage(userId,
+            `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
+            { parse_mode: 'HTML' });
+        return false;
+    }
+
+    // Обновляем данные пользователя
+    await usersCollection.updateOne(
+        { user_id: userId },
+        {
+            $push: { kz_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $set: {
+                [`kz_mails_transactions.${transactionId}.status`]: 'completed',
+                [`kz_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
+            }
+        }
+    );
+
+    // Удаляем проданные аккаунты
+    await kzMailsCollection.deleteMany({
+        _id: { $in: accountsToSell.map(a => a._id) }
+    });
+
+    // Отправляем аккаунты пользователю
+    await bot.sendMessage(userId,
+        `🎉 <b>Спасибо за покупку ${quantity} KZ MIX API REGA аккаунтов!</b>\n\n` +
+        `Ваши аккаунты:`,
+        { parse_mode: 'HTML' });
+
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `kz_mails_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} KZ MIX API REGA аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
+    }
+
+    return true;
+}
+
 // Мои покупки
 async function sendMyPurchasesMenu(chatId) {
     const usersCollection = await users();
@@ -587,8 +804,9 @@ async function sendMyPurchasesMenu(chatId) {
 
     const hasTrustSpecial = user && user.trust_specials && user.trust_specials.length > 0;
     const hasAmMails = user && user.am_mails && user.am_mails.length > 0;
+    const hasKzMails = user && user.kz_mails && user.kz_mails.length > 0;
 
-    if (!hasTrustSpecial && !hasAmMails) {
+    if (!hasTrustSpecial && !hasAmMails && !hasKzMails) {
         return bot.sendMessage(chatId,
             '❌ У вас пока нет покупок.\n' +
             'Нажмите "КАТЕГОРИИ" чтобы сделать покупку', {
@@ -607,6 +825,9 @@ async function sendMyPurchasesMenu(chatId) {
     }
     if (hasAmMails) {
         buttons.push([{ text: '🔥 USA++ (MIX) API REG🔥', callback_data: 'my_am_mails' }]);
+    }
+    if (hasKzMails) {
+        buttons.push([{ text: '🔥 KZ MIX API REGA 🔥', callback_data: 'my_kz_mails' }]);
     }
     buttons.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
 
@@ -669,6 +890,35 @@ async function sendMyAmMailsMenu(chatId) {
     buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
 
     return bot.sendMessage(chatId, '🔥 <b>Ваши USA++ (MIX) API REG аккаунты:</b> 🔥', {
+        parse_mode: 'HTML',
+        reply_markup: {
+            inline_keyboard: buttons
+        }
+    });
+}
+
+// Мои KZ MIX API REGA аккаунты
+async function sendMyKzMailsMenu(chatId) {
+    const usersCollection = await users();
+    const user = await usersCollection.findOne({ user_id: chatId });
+
+    if (!user || !user.kz_mails || user.kz_mails.length === 0) {
+        return bot.sendMessage(chatId,
+            '❌ У вас пока нет KZ MIX API REGA аккаунтов.\n' +
+            'Купите их в разделе KZ MIX API REGA', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
+                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
+                    ]
+                }
+            });
+    }
+
+    const buttons = user.kz_mails.map(account => [{ text: account.split('|')[0], callback_data: `kz_mails_show_${account}` }]);
+    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
+
+    return bot.sendMessage(chatId, '🔥 <b>Ваши KZ MIX API REGA аккаунты:</b> 🔥', {
         parse_mode: 'HTML',
         reply_markup: {
             inline_keyboard: buttons
@@ -740,6 +990,28 @@ setInterval(async () => {
                 }
             }
         }
+
+        // KZ MIX API REGA
+        const usersWithKzMails = await usersCollection.find({
+            "kz_mails_transactions": { $exists: true }
+        }).toArray();
+
+        for (const user of usersWithKzMails) {
+            for (const [transactionId, transaction] of Object.entries(user.kz_mails_transactions)) {
+                if (transaction.status === 'pending' && transaction.invoiceId) {
+                    const invoice = await checkKzMailsPayment(transaction.invoiceId);
+
+                    if (invoice?.status === 'paid') {
+                        await handleSuccessfulKzMailsPayment(user.user_id, transactionId);
+                    } else if (invoice?.status === 'expired') {
+                        await usersCollection.updateOne(
+                            { user_id: user.user_id },
+                            { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'expired' } }
+                        );
+                    }
+                }
+            }
+        }
     } catch (err) {
         console.error('Ошибка при проверке платежей:', err);
     }
@@ -780,7 +1052,8 @@ bot.on('callback_query', async (callbackQuery) => {
                         first_seen: new Date(),
                         last_seen: new Date(),
                         trust_specials: [],
-                        am_mails: []
+                        am_mails: [],
+                        kz_mails: []
                     }
                 },
                 { upsert: true }
@@ -826,6 +1099,12 @@ bot.on('callback_query', async (callbackQuery) => {
             return sendAmMailsMenu(chatId);
         }
 
+        // Категория KZ MIX API REGA
+        if (data === 'kz_mails_category') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendKzMailsMenu(chatId);
+        }
+
         // Купить TRUST SPECIAL
         if (data === 'buy_trust_special') {
             const trustSpecialCount = await (await trustSpecials()).countDocuments();
@@ -850,6 +1129,19 @@ bot.on('callback_query', async (callbackQuery) => {
             }
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendAmMailsQuantityMenu(chatId);
+        }
+
+        // Купить KZ MIX API REGA
+        if (data === 'buy_kz_mails') {
+            const kzMailsCount = await (await kzMails()).countDocuments();
+            if (kzMailsCount === 0) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'KZ MIX API REGA аккаунты временно закончились. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendKzMailsQuantityMenu(chatId);
         }
 
         // Выбор количества TRUST SPECIAL
@@ -886,6 +1178,23 @@ bot.on('callback_query', async (callbackQuery) => {
             return bot.answerCallbackQuery(callbackQuery.id);
         }
 
+        // Выбор количества KZ MIX API REGA
+        if (data.startsWith('kz_mails_quantity_')) {
+            const quantity = parseInt(data.split('_')[3]);
+            const invoiceUrl = await createKzMailsInvoice(chatId, quantity);
+
+            if (!invoiceUrl) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            await sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity);
+            return bot.answerCallbackQuery(callbackQuery.id);
+        }
+
         // Кастомное количество TRUST SPECIAL
         if (data === 'trust_special_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
@@ -904,6 +1213,15 @@ bot.on('callback_query', async (callbackQuery) => {
             return;
         }
 
+        // Кастомное количество KZ MIX API REGA
+        if (data === 'kz_mails_custom_quantity') {
+            await bot.answerCallbackQuery(callbackQuery.id);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
+            return;
+        }
+
         // Назад к выбору количества TRUST SPECIAL
         if (data === 'back_to_trust_special_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
@@ -914,6 +1232,12 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'back_to_am_mails_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendAmMailsQuantityMenu(chatId);
+        }
+
+        // Назад к выбору количества KZ MIX API REGA
+        if (data === 'back_to_kz_mails_quantity_menu') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendKzMailsQuantityMenu(chatId);
         }
 
         // Мои покупки
@@ -932,6 +1256,12 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'my_am_mails') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendMyAmMailsMenu(chatId);
+        }
+
+        // Мои KZ MIX API REGA
+        if (data === 'my_kz_mails') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyKzMailsMenu(chatId);
         }
 
         // Показываем выбранный TRUST SPECIAL аккаунт
@@ -963,6 +1293,24 @@ bot.on('callback_query', async (callbackQuery) => {
                     reply_markup: {
                         inline_keyboard: [
                             [{ text: '🔙 Назад', callback_data: 'my_am_mails' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        // Показываем выбранный KZ MIX API REGA аккаунт
+        if (data.startsWith('kz_mails_show_')) {
+            const account = data.replace('kz_mails_show_', '');
+            await bot.sendMessage(chatId,
+                `🔥 <b>Ваш KZ MIX API REGA</b>\n<code>${account}</code>\n\n` +
+                `Используйте для ваших целей!`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔙 Назад', callback_data: 'my_kz_mails' }]
                         ]
                     }
                 }
@@ -1107,6 +1455,21 @@ bot.on('message', async (msg) => {
             }
 
             await sendAmMailsPaymentMenu(chatId, invoiceUrl, inputQuantity);
+        } else if (userStates[chatId].waitingForCustomQuantity === 'kz_mails') {
+            const availableCount = await (await kzMails()).countDocuments();
+            if (inputQuantity > availableCount) {
+                await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
+                return;
+            }
+
+            const invoiceUrl = await createKzMailsInvoice(chatId, inputQuantity);
+            if (!invoiceUrl) {
+                await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
+                delete userStates[chatId];
+                return;
+            }
+
+            await sendKzMailsPaymentMenu(chatId, invoiceUrl, inputQuantity);
         }
 
         delete userStates[chatId];
@@ -1289,7 +1652,30 @@ bot.onText(/\/am (.+)/, async (msg, match) => {
         `✅ Добавлено: ${result.insertedCount}\n🔥 Всего AM (G) 5-24H: ${count}`);
 });
 
-// Если кидают файл .txt после команды /kz или /am
+// ===== Добавление KZ MIX API REGA аккаунтов =====
+bot.onText(/\/kzkz$/, async (msg) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    bot.sendMessage(msg.chat.id, "📂 Отправь .txt файл с KZ MIX API REGA аккаунтами в формате:\nemail|phone|username|key|country");
+});
+
+// Если команда с аргументами (через текст) для KZ MIX API REGA
+bot.onText(/\/kzkz (.+)/, async (msg, match) => {
+    if (!isAdmin(msg.from.id)) return;
+
+    const kzMailsCollection = await kzMails();
+    const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
+
+    const toInsert = newAccounts.map(str => ({ raw: str }));
+
+    const result = await kzMailsCollection.insertMany(toInsert, { ordered: false });
+    const count = await kzMailsCollection.countDocuments();
+
+    bot.sendMessage(msg.chat.id,
+        `✅ Добавлено: ${result.insertedCount}\n🔥 Всего KZ MIX API REGA: ${count}`);
+});
+
+// Если кидают файл .txt после команды /kz, /am или /kzkz
 bot.on('document', async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
@@ -1314,18 +1700,21 @@ bot.on('document', async (msg) => {
             return bot.sendMessage(msg.chat.id, "❌ Файл пустой!");
         }
 
-        // Проверяем, ожидает ли бот загрузки для /kz или /am
+        // Проверяем, ожидает ли бот загрузки для /kz, /am или /kzkz
         if (adminBroadcastState[msg.chat.id]?.waitingForContent) {
             return; // Игнорируем, если ждем контент для рассылки
         }
 
-        // Предполагаем, что файл для последней команды (/kz или /am)
+        // Предполагаем, что файл для последней команды (/kz, /am или /kzkz)
         const lastCommand = adminBroadcastState[msg.chat.id]?.lastCommand || 'kz'; // По умолчанию /kz
         let collection, categoryName;
 
         if (lastCommand === 'am') {
             collection = await amMails();
             categoryName = 'AM (G) 5-24H';
+        } else if (lastCommand === 'kzkz') {
+            collection = await kzMails();
+            categoryName = 'KZ MIX API REGA';
         } else {
             collection = await trustSpecials();
             categoryName = 'USA MIX 5-24H';
@@ -1344,24 +1733,27 @@ bot.on('document', async (msg) => {
 });
 
 // Сохраняем последнюю использованную команду для обработки документов
-bot.onText(/\/(kz|am)$/, async (msg, match) => {
+bot.onText(/\/(kz|am|kzkz)$/, async (msg, match) => {
     if (!isAdmin(msg.from.id)) return;
 
     const command = match[1];
     adminBroadcastState[msg.chat.id] = { lastCommand: command };
-    bot.sendMessage(msg.chat.id, `📂 Отправь .txt файл с ${command === 'kz' ? 'USA MIX 5-24H' : 'AM (G) 5-24H'} аккаунтами в формате:\nemail|phone|username|key|country`);
+    bot.sendMessage(msg.chat.id, `📂 Отправь .txt файл с ${command === 'kz' ? 'USA MIX 5-24H' : command === 'am' ? 'AM (G) 5-24H' : 'KZ MIX API REGA'} аккаунтами в формате:\nemail|phone|username|key|country`);
 });
 
-// Статус пула TRUST SPECIAL и AM (G) 5-24H
+// Статус пула TRUST SPECIAL, AM (G) 5-24H и KZ MIX API REGA
 bot.onText(/\/trust_status/, async (msg) => {
     if (!isAdmin(msg.from.id)) return;
 
     const trustSpecialsCollection = await trustSpecials();
     const amMailsCollection = await amMails();
+    const kzMailsCollection = await kzMails();
     const trustSpecialCount = await trustSpecialsCollection.countDocuments();
     const amMailsCount = await amMailsCollection.countDocuments();
+    const kzMailsCount = await kzMailsCollection.countDocuments();
     const trustSpecialFirst50 = await trustSpecialsCollection.find().limit(50).toArray();
     const amMailsFirst50 = await amMailsCollection.find().limit(50).toArray();
+    const kzMailsFirst50 = await kzMailsCollection.find().limit(50).toArray();
 
     let message = `🔥 Всего USA MIX 5-24H: ${trustSpecialCount}\n\n`;
     message += trustSpecialFirst50.map(e => e.raw).join('\n');
@@ -1370,6 +1762,10 @@ bot.onText(/\/trust_status/, async (msg) => {
     message += `\n\n🔥 USA++ (MIX) API REG: ${amMailsCount}\n\n`;
     message += amMailsFirst50.map(e => e.raw).join('\n');
     if (amMailsCount > 50) message += '\n\n...и другие (показаны первые 50)';
+
+    message += `\n\n🔥 KZ MIX API REGA: ${kzMailsCount}\n\n`;
+    message += kzMailsFirst50.map(e => e.raw).join('\n');
+    if (kzMailsCount > 50) message += '\n\n...и другие (показаны первые 50)';
 
     bot.sendMessage(msg.chat.id, message);
 });
@@ -1383,13 +1779,15 @@ bot.onText(/\/db_status/, async (msg) => {
         const stats = await db.command({ dbStats: 1 });
         const trustSpecialCount = await (await trustSpecials()).countDocuments();
         const amMailsCount = await (await amMails()).countDocuments();
+        const kzMailsCount = await (await kzMails()).countDocuments();
 
         bot.sendMessage(msg.chat.id,
             `🛠️ <b>Статус базы данных</b>\n\n` +
             `✅ Подключение активно\n` +
             `📊 Размер базы: ${(stats.dataSize / 1024).toFixed(2)} KB\n` +
             `🔥 USA MIX 5-24H в пуле: ${trustSpecialCount}\n` +
-            `🔥 USA++ (MIX) API REG ${amMailsCount}\n` +
+            `🔥 USA++ (MIX) API REG: ${amMailsCount}\n` +
+            `🔥 KZ MIX API REGA: ${kzMailsCount}\n` +
             `👥 Пользователей: ${await (await users()).countDocuments()}`,
             { parse_mode: 'HTML' });
     } catch (e) {
