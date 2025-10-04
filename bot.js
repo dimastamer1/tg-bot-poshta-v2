@@ -12,6 +12,10 @@ import path from 'path';
 const adminBroadcastState = {};
 const userStates = {};
 
+// Минимальная сумма для инвойса в USDT
+const MIN_INVOICE_AMOUNT = 1.0;
+const ACCOUNT_PRICE = 0.12;
+
 // Проверка подключения при старте
 connect().then(() => {
     console.log('✅ Проверка подключения к MongoDB успешна');
@@ -263,10 +267,11 @@ async function sendKzMailsMenu(chatId) {
 async function sendTrustSpecialQuantityMenu(chatId) {
     const trustSpecialsCollection = await trustSpecials();
     const availableCount = await countAvailable(trustSpecialsCollection);
+    const minQuantity = Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = Math.max(minQuantity, 1); i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `trust_special_quantity_${i}` });
     }
 
@@ -280,7 +285,8 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA MIX 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
+        `Минимальное количество для покупки: ${minQuantity} (сумма >= 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -296,10 +302,11 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 async function sendAmMailsQuantityMenu(chatId) {
     const amMailsCollection = await amMails();
     const availableCount = await countAvailable(amMailsCollection);
+    const minQuantity = Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = Math.max(minQuantity, 1); i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `am_mails_quantity_${i}` });
     }
 
@@ -313,7 +320,8 @@ async function sendAmMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA++ (MIX) API REG аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
+        `Минимальное количество для покупки: ${minQuantity} (сумма >= 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -329,10 +337,11 @@ async function sendAmMailsQuantityMenu(chatId) {
 async function sendKzMailsQuantityMenu(chatId) {
     const kzMailsCollection = await kzMails();
     const availableCount = await countAvailable(kzMailsCollection);
+    const minQuantity = Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = Math.max(minQuantity, 1); i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `kz_mails_quantity_${i}` });
     }
 
@@ -346,7 +355,8 @@ async function sendKzMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество KZ MIX API REGA аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n\n` +
+        `Минимальное количество для покупки: ${minQuantity} (сумма >= 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -360,7 +370,7 @@ async function sendKzMailsQuantityMenu(chatId) {
 
 // Меню оплаты TRUST SPECIAL
 async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.12 * quantity).toFixed(2);
+    const totalAmount = (ACCOUNT_PRICE * quantity).toFixed(2);
 
     const text = `💳 <b>Оплата ${quantity} USA MIX 5-24H аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
@@ -381,7 +391,7 @@ async function sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity) {
 
 // Меню оплаты AM (G) 5-24H
 async function sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.12 * quantity).toFixed(2);
+    const totalAmount = (ACCOUNT_PRICE * quantity).toFixed(2);
 
     const text = `💳 <b>Оплата ${quantity} USA++ (MIX) API REG аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
@@ -402,7 +412,7 @@ async function sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity) {
 
 // Меню оплаты KZ MIX API REGA
 async function sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity) {
-    const totalAmount = (0.12 * quantity).toFixed(2);
+    const totalAmount = (ACCOUNT_PRICE * quantity).toFixed(2);
 
     const text = `💳 <b>Оплата ${quantity} KZ MIX API REGA аккаунтов</b>\n\n` +
         `Сумма: <b>${totalAmount} USDT</b>\n\n` +
@@ -424,7 +434,12 @@ async function sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity) {
 // Создание инвойса для TRUST SPECIAL
 async function createTrustSpecialInvoice(userId, quantity) {
     const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
-    const amount = 0.12 * quantity;
+    const amount = ACCOUNT_PRICE * quantity;
+
+    if (amount < MIN_INVOICE_AMOUNT) {
+        console.log(`Amount ${amount} is less than minimum ${MIN_INVOICE_AMOUNT}`);
+        return null;
+    }
 
     // Сначала резервируем аккаунты
     let reservedAccounts = [];
@@ -530,7 +545,12 @@ async function createTrustSpecialInvoice(userId, quantity) {
 // Создание инвойса для AM (G) 5-24H
 async function createAmMailsInvoice(userId, quantity) {
     const transactionId = `buy_am_mails_${userId}_${Date.now()}`;
-    const amount = 0.12 * quantity;
+    const amount = ACCOUNT_PRICE * quantity;
+
+    if (amount < MIN_INVOICE_AMOUNT) {
+        console.log(`Amount ${amount} is less than minimum ${MIN_INVOICE_AMOUNT}`);
+        return null;
+    }
 
     // Сначала резервируем аккаунты
     let reservedAccounts = [];
@@ -636,7 +656,12 @@ async function createAmMailsInvoice(userId, quantity) {
 // Создание инвойса для KZ MIX API REGA
 async function createKzMailsInvoice(userId, quantity) {
     const transactionId = `buy_kz_mails_${userId}_${Date.now()}`;
-    const amount = 0.12 * quantity;
+    const amount = ACCOUNT_PRICE * quantity;
+
+    if (amount < MIN_INVOICE_AMOUNT) {
+        console.log(`Amount ${amount} is less than minimum ${MIN_INVOICE_AMOUNT}`);
+        return null;
+    }
 
     // Сначала резервируем аккаунты
     let reservedAccounts = [];
@@ -1198,7 +1223,7 @@ setInterval(async () => {
         }).toArray();
 
         for (const user of usersWithTrustSpecial) {
-            for (const [transactionId, transaction] of Object.entries(user.trust_special_transactions)) {
+            for (const [transactionId, transaction] of Object.entries(user.trust_special_transactions || {})) {
                 if (transaction.status === 'pending' && transaction.invoiceId) {
                     const invoice = await checkTrustSpecialPayment(transaction.invoiceId);
 
@@ -1227,7 +1252,7 @@ setInterval(async () => {
         }).toArray();
 
         for (const user of usersWithAmMails) {
-            for (const [transactionId, transaction] of Object.entries(user.am_mails_transactions)) {
+            for (const [transactionId, transaction] of Object.entries(user.am_mails_transactions || {})) {
                 if (transaction.status === 'pending' && transaction.invoiceId) {
                     const invoice = await checkAmMailsPayment(transaction.invoiceId);
 
@@ -1256,7 +1281,7 @@ setInterval(async () => {
         }).toArray();
 
         for (const user of usersWithKzMails) {
-            for (const [transactionId, transaction] of Object.entries(user.kz_mails_transactions)) {
+            for (const [transactionId, transaction] of Object.entries(user.kz_mails_transactions || {})) {
                 if (transaction.status === 'pending' && transaction.invoiceId) {
                     const invoice = await checkKzMailsPayment(transaction.invoiceId);
 
@@ -1468,7 +1493,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'trust_special_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число, минимум ' + Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE) + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'trust_special' };
             return;
         }
@@ -1477,7 +1502,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'am_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число, минимум ' + Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE) + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
             return;
         }
@@ -1486,7 +1511,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'kz_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число, минимум ' + Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE) + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
             return;
         }
@@ -1689,8 +1714,9 @@ bot.on('message', async (msg) => {
     // Обработка кастомного количества
     if (userStates[chatId]?.waitingForCustomQuantity && msg.text) {
         const inputQuantity = parseInt(msg.text.trim());
-        if (isNaN(inputQuantity) || inputQuantity <= 0) {
-            await bot.sendMessage(chatId, '❌ Пожалуйста, введите положительное целое число.');
+        const minQuantity = Math.ceil(MIN_INVOICE_AMOUNT / ACCOUNT_PRICE);
+        if (isNaN(inputQuantity) || inputQuantity < minQuantity) {
+            await bot.sendMessage(chatId, `❌ Пожалуйста, введите целое число не менее ${minQuantity}.`);
             return;
         }
 
