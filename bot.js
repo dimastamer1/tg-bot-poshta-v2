@@ -12,9 +12,6 @@ import path from 'path';
 const adminBroadcastState = {};
 const userStates = {};
 
-// Объект для блокировки обработки транзакций
-const processingTransactions = new Set();
-
 // Проверка подключения при старте
 connect().then(() => {
     console.log('✅ Проверка подключения к MongoDB успешна');
@@ -474,7 +471,7 @@ async function createAmMailsInvoice(userId, quantity) {
 
         return response.data.result.pay_url;
     } catch (err) {
-        console.error('Ошибка при создания инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
+        console.error('Ошибка при создании инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
         return null;
     }
 }
@@ -574,281 +571,266 @@ async function checkKzMailsPayment(invoiceId) {
 
 // Обработка успешной оплаты TRUST SPECIAL
 async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
-    if (processingTransactions.has(transactionId)) {
-        return false; // Уже обрабатывается
+    const usersCollection = await users();
+    const trustSpecialsCollection = await trustSpecials();
+
+    // Атомарная проверка и обновление статуса транзакции
+    const user = await usersCollection.findOneAndUpdate(
+        {
+            user_id: userId,
+            [`trust_special_transactions.${transactionId}.status`]: 'pending'
+        },
+        {
+            $set: { [`trust_special_transactions.${transactionId}.status`]: 'processing' }
+        },
+        { returnDocument: 'after' }
+    );
+
+    if (!user || !user.trust_special_transactions || !user.trust_special_transactions[transactionId]) {
+        console.log(`Транзакция ${transactionId} для пользователя ${userId} уже обработана или не существует`);
+        return false;
     }
-    processingTransactions.add(transactionId);
 
-    try {
-        const usersCollection = await users();
-        const trustSpecialsCollection = await trustSpecials();
+    const quantity = user.trust_special_transactions[transactionId].quantity;
 
-        const updatedUser = await usersCollection.findOneAndUpdate(
-            { user_id: userId, [`trust_special_transactions.${transactionId}.status`]: 'pending' },
-            { $set: { [`trust_special_transactions.${transactionId}.status`]: 'processing' } },
-            { returnDocument: 'after' }
-        );
+    // Получаем аккаунты для продажи
+    const accountsToSell = await trustSpecialsCollection.aggregate([
+        { $sample: { size: quantity } }
+    ]).toArray();
 
-        if (!updatedUser.value) {
-            return false;
-        }
-
-        const quantity = updatedUser.value.trust_special_transactions[transactionId].quantity;
-
-        // Получаем аккаунты для продажи
-        const accountsToSell = await trustSpecialsCollection.aggregate([
-            { $sample: { size: quantity } }
-        ]).toArray();
-
-        if (accountsToSell.length < quantity) {
-            await usersCollection.updateOne(
-                { user_id: userId },
-                { $set: { [`trust_special_transactions.${transactionId}.status`]: 'failed' } }
-            );
-
-            await bot.sendMessage(userId,
-                `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-                { parse_mode: 'HTML' });
-            return false;
-        }
-
-        // Обновляем данные пользователя
+    if (accountsToSell.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
-            {
-                $push: { trust_specials: { $each: accountsToSell.map(a => a.raw) } },
-                $set: {
-                    [`trust_special_transactions.${transactionId}.status`]: 'completed',
-                    [`trust_special_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
-                }
-            }
+            { $set: { [`trust_special_transactions.${transactionId}.status`]: 'failed' } }
         );
 
-        // Удаляем проданные аккаунты
-        await trustSpecialsCollection.deleteMany({
-            _id: { $in: accountsToSell.map(a => a._id) }
-        });
-
-        // Отправляем аккаунты пользователю
         await bot.sendMessage(userId,
-            `🎉 <b>Спасибо за покупку ${quantity} USA MIX 5-24H аккаунтов!</b>\n\n` +
-            `Ваши аккаунты:`,
+            `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
             { parse_mode: 'HTML' });
+        return false;
+    }
 
-        if (quantity > 5) {
-            // Создаем временный файл .txt
-            const filePath = path.join('/tmp', `trust_special_accounts_${userId}_${Date.now()}.txt`);
-            const accountsText = accountsToSell.map(a => a.raw).join('\n');
-            await fs.writeFile(filePath, accountsText);
-
-            // Отправляем файл
-            await bot.sendDocument(userId, filePath, {
-                caption: `📄 Ваши ${quantity} USA MIX 5-24H аккаунтов в файле`,
-                parse_mode: 'HTML'
-            });
-
-            // Удаляем временный файл
-            await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
-        } else {
-            // Отправляем аккаунты по одному
-            for (const account of accountsToSell) {
-                await bot.sendMessage(userId, account.raw);
+    // Обновляем данные пользователя
+    await usersCollection.updateOne(
+        { user_id: userId },
+        {
+            $push: { trust_specials: { $each: accountsToSell.map(a => a.raw) } },
+            $set: {
+                [`trust_special_transactions.${transactionId}.status`]: 'completed',
+                [`trust_special_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
             }
         }
+    );
 
-        return true;
-    } catch (err) {
-        console.error('Ошибка в handleSuccessfulTrustSpecialPayment:', err);
-        return false;
-    } finally {
-        processingTransactions.delete(transactionId);
+    // Удаляем проданные аккаунты
+    await trustSpecialsCollection.deleteMany({
+        _id: { $in: accountsToSell.map(a => a._id) }
+    });
+
+    // Отправляем аккаунты пользователю
+    await bot.sendMessage(userId,
+        `🎉 <b>Спасибо за покупку ${quantity} USA MIX 5-24H аккаунтов!</b>\n\n` +
+        `Ваши аккаунты:`,
+        { parse_mode: 'HTML' });
+
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `trust_special_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} USA MIX 5-24H аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
     }
+
+    return true;
 }
 
 // Обработка успешной оплаты AM (G) 5-24H
 async function handleSuccessfulAmMailsPayment(userId, transactionId) {
-    if (processingTransactions.has(transactionId)) {
-        return false; // Уже обрабатывается
+    const usersCollection = await users();
+    const amMailsCollection = await amMails();
+
+    // Атомарная проверка и обновление статуса транзакции
+    const user = await usersCollection.findOneAndUpdate(
+        {
+            user_id: userId,
+            [`am_mails_transactions.${transactionId}.status`]: 'pending'
+        },
+        {
+            $set: { [`am_mails_transactions.${transactionId}.status`]: 'processing' }
+        },
+        { returnDocument: 'after' }
+    );
+
+    if (!user || !user.am_mails_transactions || !user.am_mails_transactions[transactionId]) {
+        console.log(`Транзакция ${transactionId} для пользователя ${userId} уже обработана или не существует`);
+        return false;
     }
-    processingTransactions.add(transactionId);
 
-    try {
-        const usersCollection = await users();
-        const amMailsCollection = await amMails();
+    const quantity = user.am_mails_transactions[transactionId].quantity;
 
-        const updatedUser = await usersCollection.findOneAndUpdate(
-            { user_id: userId, [`am_mails_transactions.${transactionId}.status`]: 'pending' },
-            { $set: { [`am_mails_transactions.${transactionId}.status`]: 'processing' } },
-            { returnDocument: 'after' }
-        );
+    // Получаем аккаунты для продажи
+    const accountsToSell = await amMailsCollection.aggregate([
+        { $sample: { size: quantity } }
+    ]).toArray();
 
-        if (!updatedUser.value) {
-            return false;
-        }
-
-        const quantity = updatedUser.value.am_mails_transactions[transactionId].quantity;
-
-        // Получаем аккаунты для продажи
-        const accountsToSell = await amMailsCollection.aggregate([
-            { $sample: { size: quantity } }
-        ]).toArray();
-
-        if (accountsToSell.length < quantity) {
-            await usersCollection.updateOne(
-                { user_id: userId },
-                { $set: { [`am_mails_transactions.${transactionId}.status`]: 'failed' } }
-            );
-
-            await bot.sendMessage(userId,
-                `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-                { parse_mode: 'HTML' });
-            return false;
-        }
-
-        // Обновляем данные пользователя
+    if (accountsToSell.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
-            {
-                $push: { am_mails: { $each: accountsToSell.map(a => a.raw) } },
-                $set: {
-                    [`am_mails_transactions.${transactionId}.status`]: 'completed',
-                    [`am_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
-                }
-            }
+            { $set: { [`am_mails_transactions.${transactionId}.status`]: 'failed' } }
         );
 
-        // Удаляем проданные аккаунты
-        await amMailsCollection.deleteMany({
-            _id: { $in: accountsToSell.map(a => a._id) }
-        });
-
-        // Отправляем аккаунты пользователю
         await bot.sendMessage(userId,
-            `🎉 <b>Спасибо за покупку ${quantity} USA++ (MIX) API REG аккаунтов!</b>\n\n` +
-            `Ваши аккаунты:`,
+            `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
             { parse_mode: 'HTML' });
+        return false;
+    }
 
-        if (quantity > 5) {
-            // Создаем временный файл .txt
-            const filePath = path.join('/tmp', `am_mails_accounts_${userId}_${Date.now()}.txt`);
-            const accountsText = accountsToSell.map(a => a.raw).join('\n');
-            await fs.writeFile(filePath, accountsText);
-
-            // Отправляем файл
-            await bot.sendDocument(userId, filePath, {
-                caption: `📄 Ваши ${quantity} USA++ (MIX) API REG аккаунтов в файле`,
-                parse_mode: 'HTML'
-            });
-
-            // Удаляем временный файл
-            await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
-        } else {
-            // Отправляем аккаунты по одному
-            for (const account of accountsToSell) {
-                await bot.sendMessage(userId, account.raw);
+    // Обновляем данные пользователя
+    await usersCollection.updateOne(
+        { user_id: userId },
+        {
+            $push: { am_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $set: {
+                [`am_mails_transactions.${transactionId}.status`]: 'completed',
+                [`am_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
             }
         }
+    );
 
-        return true;
-    } catch (err) {
-        console.error('Ошибка в handleSuccessfulAmMailsPayment:', err);
-        return false;
-    } finally {
-        processingTransactions.delete(transactionId);
+    // Удаляем проданные аккаунты
+    await amMailsCollection.deleteMany({
+        _id: { $in: accountsToSell.map(a => a._id) }
+    });
+
+    // Отправляем аккаунты пользователю
+    await bot.sendMessage(userId,
+        `🎉 <b>Спасибо за покупку ${quantity} USA++ (MIX) API REG аккаунтов!</b>\n\n` +
+        `Ваши аккаунты:`,
+        { parse_mode: 'HTML' });
+
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `am_mails_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} USA++ (MIX) API REG аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
     }
+
+    return true;
 }
 
 // Обработка успешной оплаты KZ MIX API REGA
 async function handleSuccessfulKzMailsPayment(userId, transactionId) {
-    if (processingTransactions.has(transactionId)) {
-        return false; // Уже обрабатывается
+    const usersCollection = await users();
+    const kzMailsCollection = await kzMails();
+
+    // Атомарная проверка и обновление статуса транзакции
+    const user = await usersCollection.findOneAndUpdate(
+        {
+            user_id: userId,
+            [`kz_mails_transactions.${transactionId}.status`]: 'pending'
+        },
+        {
+            $set: { [`kz_mails_transactions.${transactionId}.status`]: 'processing' }
+        },
+        { returnDocument: 'after' }
+    );
+
+    if (!user || !user.kz_mails_transactions || !user.kz_mails_transactions[transactionId]) {
+        console.log(`Транзакция ${transactionId} для пользователя ${userId} уже обработана или не существует`);
+        return false;
     }
-    processingTransactions.add(transactionId);
 
-    try {
-        const usersCollection = await users();
-        const kzMailsCollection = await kzMails();
+    const quantity = user.kz_mails_transactions[transactionId].quantity;
 
-        const updatedUser = await usersCollection.findOneAndUpdate(
-            { user_id: userId, [`kz_mails_transactions.${transactionId}.status`]: 'pending' },
-            { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'processing' } },
-            { returnDocument: 'after' }
-        );
+    // Получаем аккаунты для продажи
+    const accountsToSell = await kzMailsCollection.aggregate([
+        { $sample: { size: quantity } }
+    ]).toArray();
 
-        if (!updatedUser.value) {
-            return false;
-        }
-
-        const quantity = updatedUser.value.kz_mails_transactions[transactionId].quantity;
-
-        // Получаем аккаунты для продажи
-        const accountsToSell = await kzMailsCollection.aggregate([
-            { $sample: { size: quantity } }
-        ]).toArray();
-
-        if (accountsToSell.length < quantity) {
-            await usersCollection.updateOne(
-                { user_id: userId },
-                { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'failed' } }
-            );
-
-            await bot.sendMessage(userId,
-                `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-                { parse_mode: 'HTML' });
-            return false;
-        }
-
-        // Обновляем данные пользователя
+    if (accountsToSell.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
-            {
-                $push: { kz_mails: { $each: accountsToSell.map(a => a.raw) } },
-                $set: {
-                    [`kz_mails_transactions.${transactionId}.status`]: 'completed',
-                    [`kz_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
-                }
-            }
+            { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'failed' } }
         );
 
-        // Удаляем проданные аккаунты
-        await kzMailsCollection.deleteMany({
-            _id: { $in: accountsToSell.map(a => a._id) }
-        });
-
-        // Отправляем аккаунты пользователю
         await bot.sendMessage(userId,
-            `🎉 <b>Спасибо за покупку ${quantity} KZ MIX API REGA аккаунтов!</b>\n\n` +
-            `Ваши аккаунты:`,
+            `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
             { parse_mode: 'HTML' });
+        return false;
+    }
 
-        if (quantity > 5) {
-            // Создаем временный файл .txt
-            const filePath = path.join('/tmp', `kz_mails_accounts_${userId}_${Date.now()}.txt`);
-            const accountsText = accountsToSell.map(a => a.raw).join('\n');
-            await fs.writeFile(filePath, accountsText);
-
-            // Отправляем файл
-            await bot.sendDocument(userId, filePath, {
-                caption: `📄 Ваши ${quantity} KZ MIX API REGA аккаунтов в файле`,
-                parse_mode: 'HTML'
-            });
-
-            // Удаляем временный файл
-            await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
-        } else {
-            // Отправляем аккаунты по одному
-            for (const account of accountsToSell) {
-                await bot.sendMessage(userId, account.raw);
+    // Обновляем данные пользователя
+    await usersCollection.updateOne(
+        { user_id: userId },
+        {
+            $push: { kz_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $set: {
+                [`kz_mails_transactions.${transactionId}.status`]: 'completed',
+                [`kz_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
             }
         }
+    );
 
-        return true;
-    } catch (err) {
-        console.error('Ошибка в handleSuccessfulKzMailsPayment:', err);
-        return false;
-    } finally {
-        processingTransactions.delete(transactionId);
+    // Удаляем проданные аккаунты
+    await kzMailsCollection.deleteMany({
+        _id: { $in: accountsToSell.map(a => a._id) }
+    });
+
+    // Отправляем аккаунты пользователю
+    await bot.sendMessage(userId,
+        `🎉 <b>Спасибо за покупку ${quantity} KZ MIX API REGA аккаунтов!</b>\n\n` +
+        `Ваши аккаунты:`,
+        { parse_mode: 'HTML' });
+
+    if (quantity > 5) {
+        // Создаем временный файл .txt
+        const filePath = path.join('/tmp', `kz_mails_accounts_${userId}_${Date.now()}.txt`);
+        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        await fs.writeFile(filePath, accountsText);
+
+        // Отправляем файл
+        await bot.sendDocument(userId, filePath, {
+            caption: `📄 Ваши ${quantity} KZ MIX API REGA аккаунтов в файле`,
+            parse_mode: 'HTML'
+        });
+
+        // Удаляем временный файл
+        await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
+    } else {
+        // Отправляем аккаунты по одному
+        for (const account of accountsToSell) {
+            await bot.sendMessage(userId, account.raw);
+        }
     }
+
+    return true;
 }
 
 // Мои покупки
@@ -1018,6 +1000,9 @@ setInterval(async () => {
                             { user_id: user.user_id },
                             { $set: { [`trust_special_transactions.${transactionId}.status`]: 'expired' } }
                         );
+                        await bot.sendMessage(user.user_id,
+                            `❌ Срок действия инвойса для ${transaction.quantity} USA MIX 5-24H аккаунтов истек. Пожалуйста, создайте новый заказ.`,
+                            { parse_mode: 'HTML' });
                     }
                 }
             }
@@ -1040,6 +1025,9 @@ setInterval(async () => {
                             { user_id: user.user_id },
                             { $set: { [`am_mails_transactions.${transactionId}.status`]: 'expired' } }
                         );
+                        await bot.sendMessage(user.user_id,
+                            `❌ Срок действия инвойса для ${transaction.quantity} USA++ (MIX) API REG аккаунтов истек. Пожалуйста, создайте новый заказ.`,
+                            { parse_mode: 'HTML' });
                     }
                 }
             }
@@ -1062,6 +1050,9 @@ setInterval(async () => {
                             { user_id: user.user_id },
                             { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'expired' } }
                         );
+                        await bot.sendMessage(user.user_id,
+                            `❌ Срок действия инвойса для ${transaction.quantity} KZ MIX API REGA аккаунтов истек. Пожалуйста, создайте новый заказ.`,
+                            { parse_mode: 'HTML' });
                     }
                 }
             }
@@ -1205,13 +1196,47 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (!invoiceUrl) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создания платежа. Попробуйте позже.',
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
                     show_alert: true
                 });
             }
 
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity);
+            return bot.answerCallbackQuery(callbackQuery.id);
+        }
+
+        // Выбор количества AM (G) 5-24H
+        if (data.startsWith('am_mails_quantity_')) {
+            const quantity = parseInt(data.split('_')[3]);
+            const invoiceUrl = await createAmMailsInvoice(chatId, quantity);
+
+            if (!invoiceUrl) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            await sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity);
+            return bot.answerCallbackQuery(callbackQuery.id);
+        }
+
+        // Выбор количества KZ MIX API REGA
+        if (data.startsWith('kz_mails_quantity_')) {
+            const quantity = parseInt(data.split('_')[3]);
+            const invoiceUrl = await createKzMailsInvoice(chatId, quantity);
+
+            if (!invoiceUrl) {
+                return bot.answerCallbackQuery(callbackQuery.id, {
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    show_alert: true
+                });
+            }
+
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            await sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity);
             return bot.answerCallbackQuery(callbackQuery.id);
         }
 
@@ -1224,13 +1249,125 @@ bot.on('callback_query', async (callbackQuery) => {
             return;
         }
 
+        // Кастомное количество AM (G) 5-24H
+        if (data === 'am_mails_custom_quantity') {
+            await bot.answerCallbackQuery(callbackQuery.id);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
+            return;
+        }
+
+        // Кастомное количество KZ MIX API REGA
+        if (data === 'kz_mails_custom_quantity') {
+            await bot.answerCallbackQuery(callbackQuery.id);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
+            userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
+            return;
+        }
+
         // Назад к выбору количества TRUST SPECIAL
         if (data === 'back_to_trust_special_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendTrustSpecialQuantityMenu(chatId);
         }
 
-        // Аналогично для других категорий...
+        // Назад к выбору количества AM (G) 5-24H
+        if (data === 'back_to_am_mails_quantity_menu') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendAmMailsQuantityMenu(chatId);
+        }
+
+        // Назад к выбору количества KZ MIX API REGA
+        if (data === 'back_to_kz_mails_quantity_menu') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendKzMailsQuantityMenu(chatId);
+        }
+
+        // Мои покупки
+        if (data === 'my_purchases') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyPurchasesMenu(chatId);
+        }
+
+        // Мои TRUST SPECIAL
+        if (data === 'my_trust_specials') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyTrustSpecialsMenu(chatId);
+        }
+
+        // Мои AM (G) 5-24H
+        if (data === 'my_am_mails') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyAmMailsMenu(chatId);
+        }
+
+        // Мои KZ MIX API REGA
+        if (data === 'my_kz_mails') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendMyKzMailsMenu(chatId);
+        }
+
+        // Показываем выбранный TRUST SPECIAL аккаунт
+        if (data.startsWith('trust_special_show_')) {
+            const account = data.replace('trust_special_show_', '');
+            await bot.sendMessage(chatId,
+                `🔥 <b>Ваш USA MIX 5-24H аккаунт:</b>\n<code>${account}</code>\n\n` +
+                `Используйте для ваших целей!`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔙 Назад', callback_data: 'my_trust_specials' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        // Показываем выбранный AM (G) 5-24H аккаунт
+        if (data.startsWith('am_mails_show_')) {
+            const account = data.replace('am_mails_show_', '');
+            await bot.sendMessage(chatId,
+                `🔥 <b>Ваш USA++ (MIX) API REG</b>\n<code>${account}</code>\n\n` +
+                `Используйте для ваших целей!`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔙 Назад', callback_data: 'my_am_mails' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        // Показываем выбранный KZ MIX API REGA аккаунт
+        if (data.startsWith('kz_mails_show_')) {
+            const account = data.replace('kz_mails_show_', '');
+            await bot.sendMessage(chatId,
+                `🔥 <b>Ваш KZ MIX API REGA</b>\n<code>${account}</code>\n\n` +
+                `Используйте для ваших целей!`,
+                {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '🔙 Назад', callback_data: 'my_kz_mails' }]
+                        ]
+                    }
+                }
+            );
+            return;
+        }
+
+        // Поддержка
+        if (data === 'support') {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+            return sendSupportMenu(chatId);
+        }
 
     } catch (err) {
         console.error('Ошибка в обработчике callback:', err);
@@ -1342,7 +1479,7 @@ bot.on('message', async (msg) => {
 
             const invoiceUrl = await createTrustSpecialInvoice(chatId, inputQuantity);
             if (!invoiceUrl) {
-                await bot.sendMessage(chatId, '❌ Ошибка при создания инвойса. Попробуйте позже.');
+                await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
                 delete userStates[chatId];
                 return;
             }
@@ -1372,7 +1509,7 @@ bot.on('message', async (msg) => {
 
             const invoiceUrl = await createKzMailsInvoice(chatId, inputQuantity);
             if (!invoiceUrl) {
-                await bot.sendMessage(chatId, '❌ Ошибка при создания инвойса. Попробуйте позже.');
+                await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
                 delete userStates[chatId];
                 return;
             }
