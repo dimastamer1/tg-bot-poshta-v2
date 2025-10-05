@@ -1,5 +1,3 @@
-
-
 import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 import Imap from 'imap';
@@ -13,6 +11,11 @@ import path from 'path';
 // Добавляем состояния
 const adminBroadcastState = {};
 const userStates = {};
+
+// Минимальная сумма инвойса
+const MIN_AMOUNT = 1;
+const ACCOUNT_PRICE = 0.12;
+const MIN_QUANTITY = Math.ceil(MIN_AMOUNT / ACCOUNT_PRICE);
 
 // Проверка подключения при старте
 connect().then(() => {
@@ -235,7 +238,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `trust_special_quantity_${i}` });
     }
 
@@ -249,7 +252,8 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA MIX 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
+        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -267,7 +271,7 @@ async function sendAmMailsQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `am_mails_quantity_${i}` });
     }
 
@@ -281,7 +285,8 @@ async function sendAmMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA++ (MIX) API REG аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
+        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -299,7 +304,7 @@ async function sendKzMailsQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = 1; i <= maxButton; i++) {
+    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `kz_mails_quantity_${i}` });
     }
 
@@ -313,7 +318,8 @@ async function sendKzMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество KZ MIX API REGA аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
+        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
 
     const options = {
         parse_mode: 'HTML',
@@ -390,9 +396,13 @@ async function sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity) {
 
 // Создание инвойса для TRUST SPECIAL
 async function createTrustSpecialInvoice(userId, quantity) {
+    const amount = ACCOUNT_PRICE * quantity;
+    if (amount < MIN_AMOUNT) {
+        return null;
+    }
+
     try {
         const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
 
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
@@ -435,9 +445,13 @@ async function createTrustSpecialInvoice(userId, quantity) {
 
 // Создание инвойса для AM (G) 5-24H
 async function createAmMailsInvoice(userId, quantity) {
+    const amount = ACCOUNT_PRICE * quantity;
+    if (amount < MIN_AMOUNT) {
+        return null;
+    }
+
     try {
         const transactionId = `buy_am_mails_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
 
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
@@ -480,9 +494,13 @@ async function createAmMailsInvoice(userId, quantity) {
 
 // Создание инвойса для KZ MIX API REGA
 async function createKzMailsInvoice(userId, quantity) {
+    const amount = ACCOUNT_PRICE * quantity;
+    if (amount < MIN_AMOUNT) {
+        return null;
+    }
+
     try {
         const transactionId = `buy_kz_mails_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
 
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
@@ -576,12 +594,17 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
     const usersCollection = await users();
     const trustSpecialsCollection = await trustSpecials();
 
-    const user = await usersCollection.findOne({ user_id: userId });
-    if (!user || !user.trust_special_transactions || !user.trust_special_transactions[transactionId]) {
+    const updatedUser = await usersCollection.findOneAndUpdate(
+        { user_id: userId, [`trust_special_transactions.${transactionId}.status`]: 'pending' },
+        { $set: { [`trust_special_transactions.${transactionId}.status`]: 'processing' } },
+        { returnDocument: 'after' }
+    );
+
+    if (!updatedUser.value) {
         return false;
     }
 
-    const quantity = user.trust_special_transactions[transactionId].quantity;
+    const quantity = updatedUser.value.trust_special_transactions[transactionId].quantity;
 
     // Получаем аккаунты для продажи
     const accountsToSell = await trustSpecialsCollection.aggregate([
@@ -652,12 +675,17 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
     const usersCollection = await users();
     const amMailsCollection = await amMails();
 
-    const user = await usersCollection.findOne({ user_id: userId });
-    if (!user || !user.am_mails_transactions || !user.am_mails_transactions[transactionId]) {
+    const updatedUser = await usersCollection.findOneAndUpdate(
+        { user_id: userId, [`am_mails_transactions.${transactionId}.status`]: 'pending' },
+        { $set: { [`am_mails_transactions.${transactionId}.status`]: 'processing' } },
+        { returnDocument: 'after' }
+    );
+
+    if (!updatedUser.value) {
         return false;
     }
 
-    const quantity = user.am_mails_transactions[transactionId].quantity;
+    const quantity = updatedUser.value.am_mails_transactions[transactionId].quantity;
 
     // Получаем аккаунты для продажи
     const accountsToSell = await amMailsCollection.aggregate([
@@ -728,12 +756,17 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
     const usersCollection = await users();
     const kzMailsCollection = await kzMails();
 
-    const user = await usersCollection.findOne({ user_id: userId });
-    if (!user || !user.kz_mails_transactions || !user.kz_mails_transactions[transactionId]) {
+    const updatedUser = await usersCollection.findOneAndUpdate(
+        { user_id: userId, [`kz_mails_transactions.${transactionId}.status`]: 'pending' },
+        { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'processing' } },
+        { returnDocument: 'after' }
+    );
+
+    if (!updatedUser.value) {
         return false;
     }
 
-    const quantity = user.kz_mails_transactions[transactionId].quantity;
+    const quantity = updatedUser.value.kz_mails_transactions[transactionId].quantity;
 
     // Получаем аккаунты для продажи
     const accountsToSell = await kzMailsCollection.aggregate([
@@ -797,151 +830,6 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
     }
 
     return true;
-}
-
-// Мои покупки
-async function sendMyPurchasesMenu(chatId) {
-    const usersCollection = await users();
-    const user = await usersCollection.findOne({ user_id: chatId });
-
-    const hasTrustSpecial = user && user.trust_specials && user.trust_specials.length > 0;
-    const hasAmMails = user && user.am_mails && user.am_mails.length > 0;
-    const hasKzMails = user && user.kz_mails && user.kz_mails.length > 0;
-
-    if (!hasTrustSpecial && !hasAmMails && !hasKzMails) {
-        return bot.sendMessage(chatId,
-            '❌ У вас пока нет покупок.\n' +
-            'Нажмите "КАТЕГОРИИ" чтобы сделать покупку', {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
-                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-                    ]
-                }
-            });
-    }
-
-    const buttons = [];
-    if (hasTrustSpecial) {
-        buttons.push([{ text: '🔥 Мои USA MIX 5-24H 🔥', callback_data: 'my_trust_specials' }]);
-    }
-    if (hasAmMails) {
-        buttons.push([{ text: '🔥 USA++ (MIX) API REG🔥', callback_data: 'my_am_mails' }]);
-    }
-    if (hasKzMails) {
-        buttons.push([{ text: '🔥 KZ MIX API REGA 🔥', callback_data: 'my_kz_mails' }]);
-    }
-    buttons.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
-
-    return bot.sendMessage(chatId, '📦 <b>Ваши покупки:</b> 📦', {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: buttons
-        }
-    });
-}
-
-// Мои TRUST SPECIAL аккаунты
-async function sendMyTrustSpecialsMenu(chatId) {
-    const usersCollection = await users();
-    const user = await usersCollection.findOne({ user_id: chatId });
-
-    if (!user || !user.trust_specials || user.trust_specials.length === 0) {
-        return bot.sendMessage(chatId,
-            '❌ У вас пока нет USA MIX 5-24H аккаунтов.\n' +
-            'Купите их в разделе USA MIX 5-24H!', {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
-                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-                    ]
-                }
-            });
-    }
-
-    const buttons = user.trust_specials.map(account => [{ text: account.split('|')[0], callback_data: `trust_special_show_${account}` }]);
-    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
-
-    return bot.sendMessage(chatId, '🔥 <b>Ваши USA MIX 5-24H аккаунты:</b> 🔥', {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: buttons
-        }
-    });
-}
-
-// Мои AM (G) 5-24H аккаунты
-async function sendMyAmMailsMenu(chatId) {
-    const usersCollection = await users();
-    const user = await usersCollection.findOne({ user_id: chatId });
-
-    if (!user || !user.am_mails || user.am_mails.length === 0) {
-        return bot.sendMessage(chatId,
-            '❌ У вас пока нет USA++ (MIX) API REG аккаунтов.\n' +
-            'Купите их в разделе USA++ (MIX) API REG', {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
-                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-                    ]
-                }
-            });
-    }
-
-    const buttons = user.am_mails.map(account => [{ text: account.split('|')[0], callback_data: `am_mails_show_${account}` }]);
-    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
-
-    return bot.sendMessage(chatId, '🔥 <b>Ваши USA++ (MIX) API REG аккаунты:</b> 🔥', {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: buttons
-        }
-    });
-}
-
-// Мои KZ MIX API REGA аккаунты
-async function sendMyKzMailsMenu(chatId) {
-    const usersCollection = await users();
-    const user = await usersCollection.findOne({ user_id: chatId });
-
-    if (!user || !user.kz_mails || user.kz_mails.length === 0) {
-        return bot.sendMessage(chatId,
-            '❌ У вас пока нет KZ MIX API REGA аккаунтов.\n' +
-            'Купите их в разделе KZ MIX API REGA', {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '📂 КАТЕГОРИИ 📂', callback_data: 'categories' }],
-                        [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-                    ]
-                }
-            });
-    }
-
-    const buttons = user.kz_mails.map(account => [{ text: account.split('|')[0], callback_data: `kz_mails_show_${account}` }]);
-    buttons.push([{ text: '🔙 Назад', callback_data: 'my_purchases' }]);
-
-    return bot.sendMessage(chatId, '🔥 <b>Ваши KZ MIX API REGA аккаунты:</b> 🔥', {
-        parse_mode: 'HTML',
-        reply_markup: {
-            inline_keyboard: buttons
-        }
-    });
-}
-
-// Меню поддержки
-async function sendSupportMenu(chatId) {
-    return bot.sendMessage(chatId,
-        '🛠️ <b>Техническая поддержка</b>\n\n' +
-        'По всем вопросам обращайтесь к менеджеру:\n' +
-        '@igor_Potekov\n\n' +
-        'Мы решим любую вашу проблему!', {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
-                ]
-            }
-        });
 }
 
 // Периодическая проверка оплаты
@@ -1187,7 +1075,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (!invoiceUrl) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    text: 'Ошибка при создания платежа. Попробуйте позже.',
                     show_alert: true
                 });
             }
@@ -1201,7 +1089,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'trust_special_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число, минимум ' + MIN_QUANTITY + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'trust_special' };
             return;
         }
@@ -1210,7 +1098,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'am_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число, минимум ' + MIN_QUANTITY + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
             return;
         }
@@ -1219,7 +1107,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'kz_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число, минимум ' + MIN_QUANTITY + '):');
             userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
             return;
         }
@@ -1422,8 +1310,8 @@ bot.on('message', async (msg) => {
     // Обработка кастомного количества
     if (userStates[chatId]?.waitingForCustomQuantity && msg.text) {
         const inputQuantity = parseInt(msg.text.trim());
-        if (isNaN(inputQuantity) || inputQuantity <= 0) {
-            await bot.sendMessage(chatId, '❌ Пожалуйста, введите положительное целое число.');
+        if (isNaN(inputQuantity) || inputQuantity < MIN_QUANTITY) {
+            await bot.sendMessage(chatId, `❌ Пожалуйста, введите целое число не менее ${MIN_QUANTITY}.`);
             return;
         }
 
