@@ -13,9 +13,9 @@ const adminBroadcastState = {};
 const userStates = {};
 
 // Минимальная сумма инвойса
-const MIN_AMOUNT = 1;
+const MIN_AMOUNT = 0.01;
 const ACCOUNT_PRICE = 0.12;
-const MIN_QUANTITY = Math.ceil(MIN_AMOUNT / ACCOUNT_PRICE);
+const MIN_QUANTITY = 1;
 
 // Проверка подключения при старте
 connect().then(() => {
@@ -238,7 +238,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
+    for (let i = 1; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `trust_special_quantity_${i}` });
     }
 
@@ -252,8 +252,7 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA MIX 5-24H аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
-        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
     const options = {
         parse_mode: 'HTML',
@@ -271,7 +270,7 @@ async function sendAmMailsQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
+    for (let i = 1; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `am_mails_quantity_${i}` });
     }
 
@@ -285,8 +284,7 @@ async function sendAmMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество USA++ (MIX) API REG аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
-        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
     const options = {
         parse_mode: 'HTML',
@@ -304,7 +302,7 @@ async function sendKzMailsQuantityMenu(chatId) {
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
-    for (let i = MIN_QUANTITY; i <= maxButton; i++) {
+    for (let i = 1; i <= maxButton; i++) {
         quantityButtons.push({ text: `${i}`, callback_data: `kz_mails_quantity_${i}` });
     }
 
@@ -318,8 +316,7 @@ async function sendKzMailsQuantityMenu(chatId) {
 
     const text = `📦 <b>Выберите количество KZ MIX API REGA аккаунтов, которое хотите приобрести</b>\n\n` +
         `Доступно: <b>${availableCount}</b> аккаунтов\n` +
-        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт\n` +
-        `Минимальное количество: <b>${MIN_QUANTITY}</b> (минимальная сумма 1 USDT)`;
+        `Цена: <b>10 Рублей</b> или <b>0.12 USDT</b> за 1 аккаунт`;
 
     const options = {
         parse_mode: 'HTML',
@@ -1089,7 +1086,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'trust_special_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число, минимум ' + MIN_QUANTITY + '):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA MIX 5-24H аккаунтов (целое число):');
             userStates[chatId] = { waitingForCustomQuantity: 'trust_special' };
             return;
         }
@@ -1098,7 +1095,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'am_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число, минимум ' + MIN_QUANTITY + '):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
             userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
             return;
         }
@@ -1107,7 +1104,7 @@ bot.on('callback_query', async (callbackQuery) => {
         if (data === 'kz_mails_custom_quantity') {
             await bot.answerCallbackQuery(callbackQuery.id);
             await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число, минимум ' + MIN_QUANTITY + '):');
+            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
             userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
             return;
         }
