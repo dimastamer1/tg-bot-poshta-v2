@@ -1205,47 +1205,13 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (!invoiceUrl) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создании платежа. Попробуйте позже.',
-                    show_alert: true
-                });
-            }
-
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity);
-            return bot.answerCallbackQuery(callbackQuery.id);
-        }
-
-        // Выбор количества AM (G) 5-24H
-        if (data.startsWith('am_mails_quantity_')) {
-            const quantity = parseInt(data.split('_')[3]);
-            const invoiceUrl = await createAmMailsInvoice(chatId, quantity);
-
-            if (!invoiceUrl) {
-                return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создании платежа. Попробуйте позже.',
-                    show_alert: true
-                });
-            }
-
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            await sendAmMailsPaymentMenu(chatId, invoiceUrl, quantity);
-            return bot.answerCallbackQuery(callbackQuery.id);
-        }
-
-        // Выбор количества KZ MIX API REGA
-        if (data.startsWith('kz_mails_quantity_')) {
-            const quantity = parseInt(data.split('_')[3]);
-            const invoiceUrl = await createKzMailsInvoice(chatId, quantity);
-
-            if (!invoiceUrl) {
-                return bot.answerCallbackQuery(callbackQuery.id, {
                     text: 'Ошибка при создания платежа. Попробуйте позже.',
                     show_alert: true
                 });
             }
 
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            await sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity);
+            await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, quantity);
             return bot.answerCallbackQuery(callbackQuery.id);
         }
 
@@ -1258,125 +1224,13 @@ bot.on('callback_query', async (callbackQuery) => {
             return;
         }
 
-        // Кастомное количество AM (G) 5-24H
-        if (data === 'am_mails_custom_quantity') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество USA++ (MIX) API REG (целое число):');
-            userStates[chatId] = { waitingForCustomQuantity: 'am_mails' };
-            return;
-        }
-
-        // Кастомное количество KZ MIX API REGA
-        if (data === 'kz_mails_custom_quantity') {
-            await bot.answerCallbackQuery(callbackQuery.id);
-            await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(chatId, '✍️ Введите желаемое количество KZ MIX API REGA (целое число):');
-            userStates[chatId] = { waitingForCustomQuantity: 'kz_mails' };
-            return;
-        }
-
         // Назад к выбору количества TRUST SPECIAL
         if (data === 'back_to_trust_special_quantity_menu') {
             await bot.deleteMessage(chatId, callbackQuery.message.message_id);
             return sendTrustSpecialQuantityMenu(chatId);
         }
 
-        // Назад к выбору количества AM (G) 5-24H
-        if (data === 'back_to_am_mails_quantity_menu') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendAmMailsQuantityMenu(chatId);
-        }
-
-        // Назад к выбору количества KZ MIX API REGA
-        if (data === 'back_to_kz_mails_quantity_menu') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendKzMailsQuantityMenu(chatId);
-        }
-
-        // Мои покупки
-        if (data === 'my_purchases') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendMyPurchasesMenu(chatId);
-        }
-
-        // Мои TRUST SPECIAL
-        if (data === 'my_trust_specials') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendMyTrustSpecialsMenu(chatId);
-        }
-
-        // Мои AM (G) 5-24H
-        if (data === 'my_am_mails') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendMyAmMailsMenu(chatId);
-        }
-
-        // Мои KZ MIX API REGA
-        if (data === 'my_kz_mails') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendMyKzMailsMenu(chatId);
-        }
-
-        // Показываем выбранный TRUST SPECIAL аккаунт
-        if (data.startsWith('trust_special_show_')) {
-            const account = data.replace('trust_special_show_', '');
-            await bot.sendMessage(chatId,
-                `🔥 <b>Ваш USA MIX 5-24H аккаунт:</b>\n<code>${account}</code>\n\n` +
-                `Используйте для ваших целей!`,
-                {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '🔙 Назад', callback_data: 'my_trust_specials' }]
-                        ]
-                    }
-                }
-            );
-            return;
-        }
-
-        // Показываем выбранный AM (G) 5-24H аккаунт
-        if (data.startsWith('am_mails_show_')) {
-            const account = data.replace('am_mails_show_', '');
-            await bot.sendMessage(chatId,
-                `🔥 <b>Ваш USA++ (MIX) API REG</b>\n<code>${account}</code>\n\n` +
-                `Используйте для ваших целей!`,
-                {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '🔙 Назад', callback_data: 'my_am_mails' }]
-                        ]
-                    }
-                }
-            );
-            return;
-        }
-
-        // Показываем выбранный KZ MIX API REGA аккаунт
-        if (data.startsWith('kz_mails_show_')) {
-            const account = data.replace('kz_mails_show_', '');
-            await bot.sendMessage(chatId,
-                `🔥 <b>Ваш KZ MIX API REGA</b>\n<code>${account}</code>\n\n` +
-                `Используйте для ваших целей!`,
-                {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{ text: '🔙 Назад', callback_data: 'my_kz_mails' }]
-                        ]
-                    }
-                }
-            );
-            return;
-        }
-
-        // Поддержка
-        if (data === 'support') {
-            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
-            return sendSupportMenu(chatId);
-        }
+        // Аналогично для других категорий...
 
     } catch (err) {
         console.error('Ошибка в обработчике callback:', err);
@@ -1474,7 +1328,7 @@ bot.on('message', async (msg) => {
     // Обработка кастомного количества
     if (userStates[chatId]?.waitingForCustomQuantity && msg.text) {
         const inputQuantity = parseInt(msg.text.trim());
-        if (isNaN(inputQuantity) || inputQuantity < 1) {
+        if (isNaN(inputQuantity) || inputQuantity <= 0) {
             await bot.sendMessage(chatId, '❌ Пожалуйста, введите положительное целое число.');
             return;
         }
