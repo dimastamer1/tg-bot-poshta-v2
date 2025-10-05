@@ -474,7 +474,7 @@ async function createAmMailsInvoice(userId, quantity) {
 
         return response.data.result.pay_url;
     } catch (err) {
-        console.error('Ошибка при создании инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
+        console.error('Ошибка при создания инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
         return null;
     }
 }
@@ -1342,7 +1342,7 @@ bot.on('message', async (msg) => {
 
             const invoiceUrl = await createTrustSpecialInvoice(chatId, inputQuantity);
             if (!invoiceUrl) {
-                await bot.sendMessage(chatId, '❌ Ошибка при создании инвойса. Попробуйте позже.');
+                await bot.sendMessage(chatId, '❌ Ошибка при создания инвойса. Попробуйте позже.');
                 delete userStates[chatId];
                 return;
             }
