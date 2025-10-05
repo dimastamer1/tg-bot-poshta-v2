@@ -12,6 +12,9 @@ import path from 'path';
 const adminBroadcastState = {};
 const userStates = {};
 
+// Время резервации в секундах
+const RESERVATION_TIME = 60;
+
 // Проверка подключения при старте
 connect().then(() => {
     console.log('✅ Проверка подключения к MongoDB успешна');
@@ -44,11 +47,19 @@ function isAdmin(userId) {
     return userId === config.adminId;
 }
 
+// Функция для подсчета доступных аккаунтов
+async function countAvailable(collection) {
+    return await collection.countDocuments({ status: 'available' });
+}
+
 // Главное меню с инлайн-кнопками
 async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageId = null) {
-    const trustSpecialCount = await (await trustSpecials()).countDocuments();
-    const amMailsCount = await (await amMails()).countDocuments();
-    const kzMailsCount = await (await kzMails()).countDocuments();
+    const trustSpecialsCollection = await trustSpecials();
+    const amMailsCollection = await amMails();
+    const kzMailsCollection = await kzMails();
+    const trustSpecialCount = await countAvailable(trustSpecialsCollection);
+    const amMailsCount = await countAvailable(amMailsCollection);
+    const kzMailsCount = await countAvailable(kzMailsCollection);
 
     const usersCollection = await users();
     await usersCollection.updateOne(
@@ -115,9 +126,12 @@ async function sendMainMenu(chatId, deletePrevious = false, msg = null, messageI
 
 // Меню категорий
 async function sendCategoriesMenu(chatId, messageId = null) {
-    const trustSpecialCount = await (await trustSpecials()).countDocuments();
-    const amMailsCount = await (await amMails()).countDocuments();
-    const kzMailsCount = await (await kzMails()).countDocuments();
+    const trustSpecialsCollection = await trustSpecials();
+    const amMailsCollection = await amMails();
+    const kzMailsCollection = await kzMails();
+    const trustSpecialCount = await countAvailable(trustSpecialsCollection);
+    const amMailsCount = await countAvailable(amMailsCollection);
+    const kzMailsCount = await countAvailable(kzMailsCollection);
 
     const text = `📂 <b>КАТЕГОРИИ</b>\n\n` +
         `В данном меню вы можете выбрать какие аккаунты хотите купить\n\n` +
@@ -159,7 +173,8 @@ async function sendCategoriesMenu(chatId, messageId = null) {
 
 // Меню TRUST SPECIAL (USA MIX 5-24H)
 async function sendTrustSpecialMenu(chatId) {
-    const trustSpecialCount = await (await trustSpecials()).countDocuments();
+    const trustSpecialsCollection = await trustSpecials();
+    const trustSpecialCount = await countAvailable(trustSpecialsCollection);
 
     const text = `🔥 <b>USA MIX 5-24H (${trustSpecialCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
@@ -182,7 +197,8 @@ async function sendTrustSpecialMenu(chatId) {
 
 // Меню AM (G) 5-24H
 async function sendAmMailsMenu(chatId) {
-    const amMailsCount = await (await amMails()).countDocuments();
+    const amMailsCollection = await amMails();
+    const amMailsCount = await countAvailable(amMailsCollection);
 
     const text = `🔥 <b>USA++ (MIX) API REG (${amMailsCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
@@ -206,7 +222,8 @@ async function sendAmMailsMenu(chatId) {
 
 // Меню KZ MIX API REGA
 async function sendKzMailsMenu(chatId) {
-    const kzMailsCount = await (await kzMails()).countDocuments();
+    const kzMailsCollection = await kzMails();
+    const kzMailsCount = await countAvailable(kzMailsCollection);
 
     const text = `🔥 <b>KZ MIX API REGA (${kzMailsCount}шт)</b>\n\n` +
         `<b>В данном меню вы можете:</b>\n` +
@@ -229,7 +246,8 @@ async function sendKzMailsMenu(chatId) {
 
 // Меню выбора количества TRUST SPECIAL
 async function sendTrustSpecialQuantityMenu(chatId) {
-    const availableCount = await (await trustSpecials()).countDocuments();
+    const trustSpecialsCollection = await trustSpecials();
+    const availableCount = await countAvailable(trustSpecialsCollection);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
@@ -261,7 +279,8 @@ async function sendTrustSpecialQuantityMenu(chatId) {
 
 // Меню выбора количества AM (G) 5-24H
 async function sendAmMailsQuantityMenu(chatId) {
-    const availableCount = await (await amMails()).countDocuments();
+    const amMailsCollection = await amMails();
+    const availableCount = await countAvailable(amMailsCollection);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
@@ -293,7 +312,8 @@ async function sendAmMailsQuantityMenu(chatId) {
 
 // Меню выбора количества KZ MIX API REGA
 async function sendKzMailsQuantityMenu(chatId) {
-    const availableCount = await (await kzMails()).countDocuments();
+    const kzMailsCollection = await kzMails();
+    const availableCount = await countAvailable(kzMailsCollection);
     const maxButton = Math.min(availableCount, 10);
 
     const quantityButtons = [];
@@ -386,12 +406,90 @@ async function sendKzMailsPaymentMenu(chatId, invoiceUrl, quantity) {
     return bot.sendMessage(chatId, text, options);
 }
 
+// Резервирование аккаунтов для TRUST SPECIAL
+async function reserveTrustSpecialAccounts(quantity, transactionId) {
+    const trustSpecialsCollection = await trustSpecials();
+
+    // Получаем доступные аккаунты
+    const availableAccounts = await trustSpecialsCollection.aggregate([
+        { $match: { status: 'available' } },
+        { $sample: { size: quantity } }
+    ]).toArray();
+
+    if (availableAccounts.length < quantity) {
+        return null;
+    }
+
+    // Резервируем аккаунты
+    const reservedIds = availableAccounts.map(a => a._id);
+    await trustSpecialsCollection.updateMany(
+        { _id: { $in: reservedIds } },
+        { $set: { status: 'reserved', reserved_transaction: transactionId, reserved_timestamp: Date.now() } }
+    );
+
+    return availableAccounts.map(a => a.raw);
+}
+
+// Резервирование аккаунтов для AM (G) 5-24H
+async function reserveAmMailsAccounts(quantity, transactionId) {
+    const amMailsCollection = await amMails();
+
+    // Получаем доступные аккаунты
+    const availableAccounts = await amMailsCollection.aggregate([
+        { $match: { status: 'available' } },
+        { $sample: { size: quantity } }
+    ]).toArray();
+
+    if (availableAccounts.length < quantity) {
+        return null;
+    }
+
+    // Резервируем аккаунты
+    const reservedIds = availableAccounts.map(a => a._id);
+    await amMailsCollection.updateMany(
+        { _id: { $in: reservedIds } },
+        { $set: { status: 'reserved', reserved_transaction: transactionId, reserved_timestamp: Date.now() } }
+    );
+
+    return availableAccounts.map(a => a.raw);
+}
+
+// Резервирование аккаунтов для KZ MIX API REGA
+async function reserveKzMailsAccounts(quantity, transactionId) {
+    const kzMailsCollection = await kzMails();
+
+    // Получаем доступные аккаунты
+    const availableAccounts = await kzMailsCollection.aggregate([
+        { $match: { status: 'available' } },
+        { $sample: { size: quantity } }
+    ]).toArray();
+
+    if (availableAccounts.length < quantity) {
+        return null;
+    }
+
+    // Резервируем аккаунты
+    const reservedIds = availableAccounts.map(a => a._id);
+    await kzMailsCollection.updateMany(
+        { _id: { $in: reservedIds } },
+        { $set: { status: 'reserved', reserved_transaction: transactionId, reserved_timestamp: Date.now() } }
+    );
+
+    return availableAccounts.map(a => a.raw);
+}
+
 // Создание инвойса для TRUST SPECIAL
 async function createTrustSpecialInvoice(userId, quantity) {
-    try {
-        const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
+    const transactionId = `buy_trust_special_${userId}_${Date.now()}`;
+    const amount = 0.12 * quantity;
 
+    // Резервируем аккаунты
+    const reservedAccounts = await reserveTrustSpecialAccounts(quantity, transactionId);
+    if (!reservedAccounts) {
+        return null;
+    }
+
+    try {
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
             amount: amount,
@@ -417,7 +515,8 @@ async function createTrustSpecialInvoice(userId, quantity) {
                         invoiceId: response.data.result.invoice_id,
                         quantity: quantity,
                         status: 'pending',
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        reserved_accounts: reservedAccounts
                     }
                 }
             },
@@ -427,16 +526,28 @@ async function createTrustSpecialInvoice(userId, quantity) {
         return response.data.result.pay_url;
     } catch (err) {
         console.error('Ошибка при создании инвойса USA MIX 5-24H:', err.response?.data || err.message);
+        // Откат резервации
+        const trustSpecialsCollection = await trustSpecials();
+        await trustSpecialsCollection.updateMany(
+            { reserved_transaction: transactionId },
+            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+        );
         return null;
     }
 }
 
 // Создание инвойса для AM (G) 5-24H
 async function createAmMailsInvoice(userId, quantity) {
-    try {
-        const transactionId = `buy_am_mails_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
+    const transactionId = `buy_am_mails_${userId}_${Date.now()}`;
+    const amount = 0.12 * quantity;
 
+    // Резервируем аккаунты
+    const reservedAccounts = await reserveAmMailsAccounts(quantity, transactionId);
+    if (!reservedAccounts) {
+        return null;
+    }
+
+    try {
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
             amount: amount,
@@ -462,7 +573,8 @@ async function createAmMailsInvoice(userId, quantity) {
                         invoiceId: response.data.result.invoice_id,
                         quantity: quantity,
                         status: 'pending',
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        reserved_accounts: reservedAccounts
                     }
                 }
             },
@@ -472,16 +584,28 @@ async function createAmMailsInvoice(userId, quantity) {
         return response.data.result.pay_url;
     } catch (err) {
         console.error('Ошибка при создании инвойса USA++ (MIX) API REG:', err.response?.data || err.message);
+        // Откат резервации
+        const amMailsCollection = await amMails();
+        await amMailsCollection.updateMany(
+            { reserved_transaction: transactionId },
+            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+        );
         return null;
     }
 }
 
 // Создание инвойса для KZ MIX API REGA
 async function createKzMailsInvoice(userId, quantity) {
-    try {
-        const transactionId = `buy_kz_mails_${userId}_${Date.now()}`;
-        const amount = 0.12 * quantity;
+    const transactionId = `buy_kz_mails_${userId}_${Date.now()}`;
+    const amount = 0.12 * quantity;
 
+    // Резервируем аккаунты
+    const reservedAccounts = await reserveKzMailsAccounts(quantity, transactionId);
+    if (!reservedAccounts) {
+        return null;
+    }
+
+    try {
         const response = await axios.post('https://pay.crypt.bot/api/createInvoice', {
             asset: 'USDT',
             amount: amount,
@@ -507,7 +631,8 @@ async function createKzMailsInvoice(userId, quantity) {
                         invoiceId: response.data.result.invoice_id,
                         quantity: quantity,
                         status: 'pending',
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        reserved_accounts: reservedAccounts
                     }
                 }
             },
@@ -517,6 +642,12 @@ async function createKzMailsInvoice(userId, quantity) {
         return response.data.result.pay_url;
     } catch (err) {
         console.error('Ошибка при создании инвойса KZ MIX API REGA:', err.response?.data || err.message);
+        // Откат резервации
+        const kzMailsCollection = await kzMails();
+        await kzMailsCollection.updateMany(
+            { reserved_transaction: transactionId },
+            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+        );
         return null;
     }
 }
@@ -579,14 +710,11 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
         return false;
     }
 
-    const quantity = user.trust_special_transactions[transactionId].quantity;
+    const transaction = user.trust_special_transactions[transactionId];
+    const quantity = transaction.quantity;
+    const reservedAccounts = transaction.reserved_accounts;
 
-    // Получаем аккаунты для продажи
-    const accountsToSell = await trustSpecialsCollection.aggregate([
-        { $sample: { size: quantity } }
-    ]).toArray();
-
-    if (accountsToSell.length < quantity) {
+    if (!reservedAccounts || reservedAccounts.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             { $set: { [`trust_special_transactions.${transactionId}.status`]: 'failed' } }
@@ -594,7 +722,8 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
 
         await bot.sendMessage(userId,
             `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-            { parse_mode: 'HTML' });
+            { parse_mode: 'HTML' }
+        );
         return false;
     }
 
@@ -602,18 +731,16 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
     await usersCollection.updateOne(
         { user_id: userId },
         {
-            $push: { trust_specials: { $each: accountsToSell.map(a => a.raw) } },
+            $push: { trust_specials: { $each: reservedAccounts } },
             $set: {
                 [`trust_special_transactions.${transactionId}.status`]: 'completed',
-                [`trust_special_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
+                [`trust_special_transactions.${transactionId}.accounts`]: reservedAccounts
             }
         }
     );
 
     // Удаляем проданные аккаунты
-    await trustSpecialsCollection.deleteMany({
-        _id: { $in: accountsToSell.map(a => a._id) }
-    });
+    await trustSpecialsCollection.deleteMany({ reserved_transaction: transactionId });
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
@@ -624,7 +751,7 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
     if (quantity > 5) {
         // Создаем временный файл .txt
         const filePath = path.join('/tmp', `trust_special_accounts_${userId}_${Date.now()}.txt`);
-        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        const accountsText = reservedAccounts.join('\n');
         await fs.writeFile(filePath, accountsText);
 
         // Отправляем файл
@@ -637,8 +764,8 @@ async function handleSuccessfulTrustSpecialPayment(userId, transactionId) {
         await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
     } else {
         // Отправляем аккаунты по одному
-        for (const account of accountsToSell) {
-            await bot.sendMessage(userId, account.raw);
+        for (const account of reservedAccounts) {
+            await bot.sendMessage(userId, account);
         }
     }
 
@@ -655,14 +782,11 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
         return false;
     }
 
-    const quantity = user.am_mails_transactions[transactionId].quantity;
+    const transaction = user.am_mails_transactions[transactionId];
+    const quantity = transaction.quantity;
+    const reservedAccounts = transaction.reserved_accounts;
 
-    // Получаем аккаунты для продажи
-    const accountsToSell = await amMailsCollection.aggregate([
-        { $sample: { size: quantity } }
-    ]).toArray();
-
-    if (accountsToSell.length < quantity) {
+    if (!reservedAccounts || reservedAccounts.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             { $set: { [`am_mails_transactions.${transactionId}.status`]: 'failed' } }
@@ -670,7 +794,8 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
 
         await bot.sendMessage(userId,
             `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-            { parse_mode: 'HTML' });
+            { parse_mode: 'HTML' }
+        );
         return false;
     }
 
@@ -678,18 +803,16 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
     await usersCollection.updateOne(
         { user_id: userId },
         {
-            $push: { am_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $push: { am_mails: { $each: reservedAccounts } },
             $set: {
                 [`am_mails_transactions.${transactionId}.status`]: 'completed',
-                [`am_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
+                [`am_mails_transactions.${transactionId}.accounts`]: reservedAccounts
             }
         }
     );
 
     // Удаляем проданные аккаунты
-    await amMailsCollection.deleteMany({
-        _id: { $in: accountsToSell.map(a => a._id) }
-    });
+    await amMailsCollection.deleteMany({ reserved_transaction: transactionId });
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
@@ -700,7 +823,7 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
     if (quantity > 5) {
         // Создаем временный файл .txt
         const filePath = path.join('/tmp', `am_mails_accounts_${userId}_${Date.now()}.txt`);
-        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        const accountsText = reservedAccounts.join('\n');
         await fs.writeFile(filePath, accountsText);
 
         // Отправляем файл
@@ -713,8 +836,8 @@ async function handleSuccessfulAmMailsPayment(userId, transactionId) {
         await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
     } else {
         // Отправляем аккаунты по одному
-        for (const account of accountsToSell) {
-            await bot.sendMessage(userId, account.raw);
+        for (const account of reservedAccounts) {
+            await bot.sendMessage(userId, account);
         }
     }
 
@@ -731,14 +854,11 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
         return false;
     }
 
-    const quantity = user.kz_mails_transactions[transactionId].quantity;
+    const transaction = user.kz_mails_transactions[transactionId];
+    const quantity = transaction.quantity;
+    const reservedAccounts = transaction.reserved_accounts;
 
-    // Получаем аккаунты для продажи
-    const accountsToSell = await kzMailsCollection.aggregate([
-        { $sample: { size: quantity } }
-    ]).toArray();
-
-    if (accountsToSell.length < quantity) {
+    if (!reservedAccounts || reservedAccounts.length < quantity) {
         await usersCollection.updateOne(
             { user_id: userId },
             { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'failed' } }
@@ -746,7 +866,8 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
 
         await bot.sendMessage(userId,
             `❌ Недостаточно аккаунтов в пуле\nОбратитесь в поддержку @igor_Potekov`,
-            { parse_mode: 'HTML' });
+            { parse_mode: 'HTML' }
+        );
         return false;
     }
 
@@ -754,18 +875,16 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
     await usersCollection.updateOne(
         { user_id: userId },
         {
-            $push: { kz_mails: { $each: accountsToSell.map(a => a.raw) } },
+            $push: { kz_mails: { $each: reservedAccounts } },
             $set: {
                 [`kz_mails_transactions.${transactionId}.status`]: 'completed',
-                [`kz_mails_transactions.${transactionId}.accounts`]: accountsToSell.map(a => a.raw)
+                [`kz_mails_transactions.${transactionId}.accounts`]: reservedAccounts
             }
         }
     );
 
     // Удаляем проданные аккаунты
-    await kzMailsCollection.deleteMany({
-        _id: { $in: accountsToSell.map(a => a._id) }
-    });
+    await kzMailsCollection.deleteMany({ reserved_transaction: transactionId });
 
     // Отправляем аккаунты пользователю
     await bot.sendMessage(userId,
@@ -776,7 +895,7 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
     if (quantity > 5) {
         // Создаем временный файл .txt
         const filePath = path.join('/tmp', `kz_mails_accounts_${userId}_${Date.now()}.txt`);
-        const accountsText = accountsToSell.map(a => a.raw).join('\n');
+        const accountsText = reservedAccounts.join('\n');
         await fs.writeFile(filePath, accountsText);
 
         // Отправляем файл
@@ -789,8 +908,8 @@ async function handleSuccessfulKzMailsPayment(userId, transactionId) {
         await fs.unlink(filePath).catch(err => console.error('Ошибка при удалении временного файла:', err));
     } else {
         // Отправляем аккаунты по одному
-        for (const account of accountsToSell) {
-            await bot.sendMessage(userId, account.raw);
+        for (const account of reservedAccounts) {
+            await bot.sendMessage(userId, account);
         }
     }
 
@@ -942,7 +1061,7 @@ async function sendSupportMenu(chatId) {
         });
 }
 
-// Периодическая проверка оплаты
+// Периодическая проверка оплаты и истекших резерваций
 setInterval(async () => {
     try {
         const usersCollection = await users();
@@ -959,7 +1078,14 @@ setInterval(async () => {
 
                     if (invoice?.status === 'paid') {
                         await handleSuccessfulTrustSpecialPayment(user.user_id, transactionId);
-                    } else if (invoice?.status === 'expired') {
+                    } else if (invoice?.status === 'expired' || (Date.now() - transaction.timestamp) > RESERVATION_TIME * 1000) {
+                        // Возвращаем аккаунты в пул
+                        const trustSpecialsCollection = await trustSpecials();
+                        await trustSpecialsCollection.updateMany(
+                            { reserved_transaction: transactionId },
+                            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+                        );
+
                         await usersCollection.updateOne(
                             { user_id: user.user_id },
                             { $set: { [`trust_special_transactions.${transactionId}.status`]: 'expired' } }
@@ -981,7 +1107,14 @@ setInterval(async () => {
 
                     if (invoice?.status === 'paid') {
                         await handleSuccessfulAmMailsPayment(user.user_id, transactionId);
-                    } else if (invoice?.status === 'expired') {
+                    } else if (invoice?.status === 'expired' || (Date.now() - transaction.timestamp) > RESERVATION_TIME * 1000) {
+                        // Возвращаем аккаунты в пул
+                        const amMailsCollection = await amMails();
+                        await amMailsCollection.updateMany(
+                            { reserved_transaction: transactionId },
+                            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+                        );
+
                         await usersCollection.updateOne(
                             { user_id: user.user_id },
                             { $set: { [`am_mails_transactions.${transactionId}.status`]: 'expired' } }
@@ -1003,7 +1136,14 @@ setInterval(async () => {
 
                     if (invoice?.status === 'paid') {
                         await handleSuccessfulKzMailsPayment(user.user_id, transactionId);
-                    } else if (invoice?.status === 'expired') {
+                    } else if (invoice?.status === 'expired' || (Date.now() - transaction.timestamp) > RESERVATION_TIME * 1000) {
+                        // Возвращаем аккаунты в пул
+                        const kzMailsCollection = await kzMails();
+                        await kzMailsCollection.updateMany(
+                            { reserved_transaction: transactionId },
+                            { $set: { status: 'available' }, $unset: { reserved_transaction: '', reserved_timestamp: '' } }
+                        );
+
                         await usersCollection.updateOne(
                             { user_id: user.user_id },
                             { $set: { [`kz_mails_transactions.${transactionId}.status`]: 'expired' } }
@@ -1107,7 +1247,8 @@ bot.on('callback_query', async (callbackQuery) => {
 
         // Купить TRUST SPECIAL
         if (data === 'buy_trust_special') {
-            const trustSpecialCount = await (await trustSpecials()).countDocuments();
+            const trustSpecialsCollection = await trustSpecials();
+            const trustSpecialCount = await countAvailable(trustSpecialsCollection);
             if (trustSpecialCount === 0) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
                     text: 'USA MIX 5-24H аккаунты временно закончились. Попробуйте позже.',
@@ -1120,7 +1261,8 @@ bot.on('callback_query', async (callbackQuery) => {
 
         // Купить AM (G) 5-24H
         if (data === 'buy_am_mails') {
-            const amMailsCount = await (await amMails()).countDocuments();
+            const amMailsCollection = await amMails();
+            const amMailsCount = await countAvailable(amMailsCollection);
             if (amMailsCount === 0) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
                     text: 'USA++ (MIX) API REG аккаунты временно закончились. Попробуйте позже.',
@@ -1133,7 +1275,8 @@ bot.on('callback_query', async (callbackQuery) => {
 
         // Купить KZ MIX API REGA
         if (data === 'buy_kz_mails') {
-            const kzMailsCount = await (await kzMails()).countDocuments();
+            const kzMailsCollection = await kzMails();
+            const kzMailsCount = await countAvailable(kzMailsCollection);
             if (kzMailsCount === 0) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
                     text: 'KZ MIX API REGA аккаунты временно закончились. Попробуйте позже.',
@@ -1185,7 +1328,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (!invoiceUrl) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создания платежа. Попробуйте позже.',
+                    text: 'Ошибка при создании платежа. Попробуйте позже.',
                     show_alert: true
                 });
             }
@@ -1426,7 +1569,8 @@ bot.on('message', async (msg) => {
         }
 
         if (userStates[chatId].waitingForCustomQuantity === 'trust_special') {
-            const availableCount = await (await trustSpecials()).countDocuments();
+            const trustSpecialsCollection = await trustSpecials();
+            const availableCount = await countAvailable(trustSpecialsCollection);
             if (inputQuantity > availableCount) {
                 await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
                 return;
@@ -1441,7 +1585,8 @@ bot.on('message', async (msg) => {
 
             await sendTrustSpecialPaymentMenu(chatId, invoiceUrl, inputQuantity);
         } else if (userStates[chatId].waitingForCustomQuantity === 'am_mails') {
-            const availableCount = await (await amMails()).countDocuments();
+            const amMailsCollection = await amMails();
+            const availableCount = await countAvailable(amMailsCollection);
             if (inputQuantity > availableCount) {
                 await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
                 return;
@@ -1456,7 +1601,8 @@ bot.on('message', async (msg) => {
 
             await sendAmMailsPaymentMenu(chatId, invoiceUrl, inputQuantity);
         } else if (userStates[chatId].waitingForCustomQuantity === 'kz_mails') {
-            const availableCount = await (await kzMails()).countDocuments();
+            const kzMailsCollection = await kzMails();
+            const availableCount = await countAvailable(kzMailsCollection);
             if (inputQuantity > availableCount) {
                 await bot.sendMessage(chatId, `❌ Недостаточно аккаунтов в наличии. Доступно только ${availableCount} шт.`);
                 return;
@@ -1620,10 +1766,10 @@ bot.onText(/\/kz (.+)/, async (msg, match) => {
     const trustSpecialsCollection = await trustSpecials();
     const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
 
-    const toInsert = newAccounts.map(str => ({ raw: str }));
+    const toInsert = newAccounts.map(str => ({ raw: str, status: 'available' }));
 
     const result = await trustSpecialsCollection.insertMany(toInsert, { ordered: false });
-    const count = await trustSpecialsCollection.countDocuments();
+    const count = await countAvailable(trustSpecialsCollection);
 
     bot.sendMessage(msg.chat.id,
         `✅ Добавлено: ${result.insertedCount}\n🔥 Всего USA MIX 5-24H: ${count}`);
@@ -1643,10 +1789,10 @@ bot.onText(/\/am (.+)/, async (msg, match) => {
     const amMailsCollection = await amMails();
     const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
 
-    const toInsert = newAccounts.map(str => ({ raw: str }));
+    const toInsert = newAccounts.map(str => ({ raw: str, status: 'available' }));
 
     const result = await amMailsCollection.insertMany(toInsert, { ordered: false });
-    const count = await amMailsCollection.countDocuments();
+    const count = await countAvailable(amMailsCollection);
 
     bot.sendMessage(msg.chat.id,
         `✅ Добавлено: ${result.insertedCount}\n🔥 Всего AM (G) 5-24H: ${count}`);
@@ -1666,10 +1812,10 @@ bot.onText(/\/kzkz (.+)/, async (msg, match) => {
     const kzMailsCollection = await kzMails();
     const newAccounts = match[1].split(',').map(e => e.trim()).filter(e => e);
 
-    const toInsert = newAccounts.map(str => ({ raw: str }));
+    const toInsert = newAccounts.map(str => ({ raw: str, status: 'available' }));
 
     const result = await kzMailsCollection.insertMany(toInsert, { ordered: false });
-    const count = await kzMailsCollection.countDocuments();
+    const count = await countAvailable(kzMailsCollection);
 
     bot.sendMessage(msg.chat.id,
         `✅ Добавлено: ${result.insertedCount}\n🔥 Всего KZ MIX API REGA: ${count}`);
@@ -1720,9 +1866,9 @@ bot.on('document', async (msg) => {
             categoryName = 'USA MIX 5-24H';
         }
 
-        const toInsert = lines.map(str => ({ raw: str }));
+        const toInsert = lines.map(str => ({ raw: str, status: 'available' }));
         const result = await collection.insertMany(toInsert, { ordered: false });
-        const count = await collection.countDocuments();
+        const count = await countAvailable(collection);
 
         bot.sendMessage(msg.chat.id,
             `✅ Из файла добавлено: ${result.insertedCount}\n🔥 Всего ${categoryName}: ${count}`);
@@ -1748,12 +1894,12 @@ bot.onText(/\/trust_status/, async (msg) => {
     const trustSpecialsCollection = await trustSpecials();
     const amMailsCollection = await amMails();
     const kzMailsCollection = await kzMails();
-    const trustSpecialCount = await trustSpecialsCollection.countDocuments();
-    const amMailsCount = await amMailsCollection.countDocuments();
-    const kzMailsCount = await kzMailsCollection.countDocuments();
-    const trustSpecialFirst50 = await trustSpecialsCollection.find().limit(50).toArray();
-    const amMailsFirst50 = await amMailsCollection.find().limit(50).toArray();
-    const kzMailsFirst50 = await kzMailsCollection.find().limit(50).toArray();
+    const trustSpecialCount = await countAvailable(trustSpecialsCollection);
+    const amMailsCount = await countAvailable(amMailsCollection);
+    const kzMailsCount = await countAvailable(kzMailsCollection);
+    const trustSpecialFirst50 = await trustSpecialsCollection.find({ status: 'available' }).limit(50).toArray();
+    const amMailsFirst50 = await amMailsCollection.find({ status: 'available' }).limit(50).toArray();
+    const kzMailsFirst50 = await kzMailsCollection.find({ status: 'available' }).limit(50).toArray();
 
     let message = `🔥 Всего USA MIX 5-24H: ${trustSpecialCount}\n\n`;
     message += trustSpecialFirst50.map(e => e.raw).join('\n');
@@ -1777,9 +1923,12 @@ bot.onText(/\/db_status/, async (msg) => {
     try {
         const db = await connect();
         const stats = await db.command({ dbStats: 1 });
-        const trustSpecialCount = await (await trustSpecials()).countDocuments();
-        const amMailsCount = await (await amMails()).countDocuments();
-        const kzMailsCount = await (await kzMails()).countDocuments();
+        const trustSpecialsCollection = await trustSpecials();
+        const amMailsCollection = await amMails();
+        const kzMailsCollection = await kzMails();
+        const trustSpecialCount = await countAvailable(trustSpecialsCollection);
+        const amMailsCount = await countAvailable(amMailsCollection);
+        const kzMailsCount = await countAvailable(kzMailsCollection);
 
         bot.sendMessage(msg.chat.id,
             `🛠️ <b>Статус базы данных</b>\n\n` +
