@@ -1185,7 +1185,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
             if (!invoiceUrl) {
                 return bot.answerCallbackQuery(callbackQuery.id, {
-                    text: 'Ошибка при создании платежа. Попробуйте позже.',
+                    text: 'Ошибка при создания платежа. Попробуйте позже.',
                     show_alert: true
                 });
             }
